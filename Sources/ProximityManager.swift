@@ -257,13 +257,16 @@ class ProximityManager: ObservableObject {
     @Published var state: WalkieState = .idle
     @Published var distanceLevel: DistanceLevel = .unknown
     @Published var connectedDevices: [String] = []
+    @Published var tokenExchangeCompleted: Bool = false
     
     // MARK: - 内部组件
     private let uwbProvider = UWBProximityProvider.shared
     private let audioController = AudioController()
     private let distanceSmoother = DistanceSmoother()
+    private let peerManager = PeerManager.shared
     
     private var cancellables = Set<AnyCancellable>()
+    private var currentPeerID: MCPeerID?
     
     // MARK: - 配置
     var minDistance: Double = 1.0
@@ -275,6 +278,7 @@ class ProximityManager: ObservableObject {
     private init() {
         uwbProvider.configure(with: self)
         setupBindings()
+        setupPeerManagerIntegration()
     }
     
     private func setupBindings() {
@@ -283,6 +287,20 @@ class ProximityManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] distance in
                 self?.updateDistance(distance)
+            }
+            .store(in: &cancellables)
+    }
+    
+    /// 设置与 PeerManager 的集成
+    private func setupPeerManagerIntegration() {
+        // 设置 Token 交换委托
+        peerManager.tokenExchangeDelegate = self
+        
+        // 监听 PeerManager 连接状态变化
+        peerManager.$connectedDevices
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] devices in
+                self?.connectedDevices = devices.map { $0.displayName }
             }
             .store(in: &cancellables)
     }
@@ -307,10 +325,14 @@ class ProximityManager: ObservableObject {
             return
         }
         
+        // 启动 PeerManager（MultipeerConnectivity）
+        peerManager.start()
+        
         // 启动 UWB
         do {
             try uwbProvider.start()
             if uwbProvider.isAvailable {
+                // 等待对端连接后会触发 Token 交换
                 transition(to: .connected)
             }
         } catch {
@@ -322,10 +344,39 @@ class ProximityManager: ObservableObject {
     /// 停止对讲功能
     func stopWalkieTalkie() {
         uwbProvider.stop()
+        peerManager.stop()
         distanceSmoother.reset()
         currentDistance = 0.0
         currentVolume = 0.5
+        tokenExchangeCompleted = false
+        currentPeerID = nil
         transition(to: .idle)
+    }
+    
+    /// 主动发起 Token 交换（当有对端连接时调用）
+    func initiateTokenExchange(with peerID: MCPeerID) {
+        guard let token = uwbProvider.myDiscoveryToken ?? uwbProvider.session?.discoveryToken else {
+            print("[Manager] No local discovery token available for exchange")
+            return
+        }
+        
+        currentPeerID = peerID
+        peerManager.sendDiscoveryToken(token, to: peerID)
+        
+        print("[Manager] Initiating token exchange with \(peerID.displayName)")
+    }
+    
+    /// 使用对端 Token 配置 NI 会话（Token 交换的核心步骤）
+    func configureNISession(withPeerToken peerToken: NIDiscoveryToken, fromPeer peerID: MCPeerID) {
+        currentPeerID = peerID
+        
+        // 使用 NINearbyPeerConfiguration 配置会话
+        uwbProvider.configureWithPeerToken(peerToken)
+        
+        tokenExchangeCompleted = true
+        transition(to: .transmitting)
+        
+        print("[Manager] NI session configured with peer token from \(peerID.displayName)")
     }
     
     /// 更新距离（由 Provider 调用）
@@ -355,5 +406,32 @@ class ProximityManager: ObservableObject {
         guard state != newState else { return }
         print("[State] \(state.rawValue) → \(newState.rawValue)")
         state = newState
+    }
+}
+
+// MARK: - TokenExchangeDelegate
+extension ProximityManager: TokenExchangeDelegate {
+    /// 当从对端收到 NIDiscoveryToken 时调用
+    func peerManager(_ peerManager: PeerManager, didReceiveDiscoveryToken token: NIDiscoveryToken, fromPeer peerID: MCPeerID) {
+        print("[Manager] Received discovery token from \(peerID.displayName)")
+        
+        // 使用接收到的 Token 配置 NI 会话
+        // 这是 Token 交换流程的关键步骤
+        configureNISession(withPeerToken: token, fromPeer: peerID)
+    }
+    
+    /// Token 交换完成时调用
+    func peerManager(_ peerManager: PeerManager, didCompleteTokenExchangeWith peerID: MCPeerID) {
+        print("[Manager] Token exchange completed with \(peerID.displayName)")
+        tokenExchangeCompleted = true
+        
+        // 双方都已交换 Token，现在可以开始 UWB 测距
+        if let myToken = uwbProvider.myDiscoveryToken ?? uwbProvider.session?.discoveryToken {
+            // 如果还没有配置对端 Token，现在配置
+            if !tokenExchangeCompleted {
+                // 检查是否已有对端 Token
+                // 这里可以根据需要实现自动配置
+            }
+        }
     }
 }

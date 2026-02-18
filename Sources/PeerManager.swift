@@ -3,6 +3,7 @@ import MultipeerConnectivity
 import NearbyInteraction  // 需要 NIDiscoveryToken
 import UIKit
 import Combine
+import AVFoundation
 
 // MARK: - 设备对等体模型
 struct PeerDevice: Identifiable {
@@ -31,6 +32,7 @@ enum PeerMessageType: String, Codable {
     case disconnect = "disconnect"
     case discoveryToken = "discoveryToken"     // 新增：NIDiscoveryToken 消息
     case tokenAck = "tokenAck"                // 新增：Token 确认
+    case audioStream = "audioStream"          // 音频流消息
 }
 
 struct PeerMessage: Codable {
@@ -77,6 +79,205 @@ protocol TokenExchangeDelegate: AnyObject {
     func peerManager(_ peerManager: PeerManager, didReceiveDiscoveryToken token: NIDiscoveryToken, fromPeer peerID: MCPeerID)
     /// Token 交换完成
     func peerManager(_ peerManager: PeerManager, didCompleteTokenExchangeWith peerID: MCPeerID)
+}
+
+// MARK: - AudioStreamManager
+/// 音频流管理器 - 处理音频采集、编码、传输和播放
+class AudioStreamManager: NSObject {
+    static let shared = AudioStreamManager()
+    
+    // 音频配置
+    private let sampleRate: Double = 16000
+    private let channels: AVAudioChannelCount = 1
+    private let bufferSize: AVAudioFrameCount = 1024
+    
+    // 音频引擎
+    private var audioEngine: AVAudioEngine?
+    private var inputNode: AVAudioInputNode?
+    private var outputNode: AVAudioOutputNode?
+    
+    // 播放相关
+    private var audioPlayer: AVAudioPlayerNode?
+    private var audioFormat: AVAudioFormat?
+    
+    // 状态
+    @Published private(set) var isRecording = false
+    @Published private(set) var isPlaying = false
+    @Published private(set) var isPTTPressed = false
+    
+    // 回调
+    var onAudioDataReceived: ((Data) -> Void)?
+    
+    // 音频会话
+    private let audioSession = AVAudioSession.sharedInstance()
+    
+    private override init() {
+        super.init()
+    }
+    
+    // MARK: - Public Methods
+    
+    /// 配置音频会话
+    func configureAudioSession() throws {
+        try audioSession.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothA2DP, .defaultToSpeaker])
+        try audioSession.setPreferredSampleRate(sampleRate)
+        try audioSession.setPreferredIOBufferDuration(Double(bufferSize) / sampleRate)
+        try audioSession.setActive(true)
+        print("[Audio] Session configured: \(sampleRate)Hz, \(channels)ch")
+    }
+    
+    /// 启动音频引擎
+    func start() throws {
+        guard audioEngine == nil else {
+            print("[Audio] Already started")
+            return
+        }
+        
+        try configureAudioSession()
+        
+        audioEngine = AVAudioEngine()
+        guard let engine = audioEngine else { return }
+        
+        inputNode = engine.inputNode
+        outputNode = engine.outputNode
+        
+        // 创建音频格式
+        let inputFormat = inputNode!.outputFormat(forBus: 0)
+        audioFormat = AVAudioFormat(
+            commonFormat: .pcmFormatInt16,
+            sampleRate: inputFormat.sampleRate,
+            channels: 1,
+            interleaved: true
+        )
+        
+        // 设置播放节点
+        audioPlayer = AVAudioPlayerNode()
+        engine.attach(audioPlayer!)
+        
+        // 连接播放节点到输出
+        if let player = audioPlayer, let format = audioFormat {
+            engine.connect(player, to: engine.mainMixerNode, format: format)
+        }
+        
+        // 启动引擎
+        try engine.start()
+        print("[Audio] Engine started")
+    }
+    
+    /// 停止音频引擎
+    func stop() {
+        stopRecording()
+        stopPlaying()
+        
+        audioEngine?.stop()
+        audioEngine = nil
+        audioPlayer = nil
+        inputNode = nil
+        outputNode = nil
+        
+        print("[Audio] Engine stopped")
+    }
+    
+    /// 开始录制 (PTT按下)
+    func startRecording(onAudioData: @escaping (Data) -> Void) {
+        guard let engine = audioEngine, !isRecording else { return }
+        
+        isRecording = true
+        isPTTPressed = true
+        
+        let inputNode = engine.inputNode
+        let recordingFormat = inputNode.outputFormat(forBus: 0)
+        
+        // 安装录制tap
+        inputNode.installTap(onBus: 0, bufferSize: bufferSize, format: recordingFormat) { [weak self] buffer, _ in
+            self?.processAudioBuffer(buffer, callback: onAudioData)
+        }
+        
+        // 如果播放器未启动，启动它
+        if let player = audioPlayer, !player.isPlaying {
+            player.play()
+        }
+        
+        print("[Audio] Recording started")
+    }
+    
+    /// 停止录制 (PTT释放)
+    func stopRecording() {
+        guard isRecording else { return }
+        
+        inputNode?.removeTap(onBus: 0)
+        isRecording = false
+        isPTTPressed = false
+        
+        print("[Audio] Recording stopped")
+    }
+    
+    /// 播放接收到的音频数据
+    func playAudioData(_ data: Data) {
+        guard let player = audioPlayer, let format = audioFormat else {
+            print("[Audio] Cannot play: not initialized")
+            return
+        }
+        
+        do {
+            // 解码音频数据
+            let audioBuffer = try AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(data.count / 2))
+            
+            // 将 Data 转换为 bytes
+            data.withUnsafeBytes { rawBufferPointer in
+                if let baseAddress = rawBufferPointer.baseAddress {
+                    let int16Pointer = baseAddress.assumingMemoryBound(to: Int16.self)
+                    let frameCount = AVAudioFrameCount(data.count / 2)
+                    audioBuffer?.frameLength = frameCount
+                    
+                    if let channelData = audioBuffer?.int16ChannelData {
+                        channelData[0].assign(from: int16Pointer, count: Int(frameCount))
+                    }
+                }
+            }
+            
+            if let buffer = audioBuffer {
+                player.scheduleBuffer(buffer, completionHandler: nil)
+            }
+            
+            if !player.isPlaying {
+                player.play()
+            }
+            
+            isPlaying = true
+            
+        } catch {
+            print("[Audio] Playback error: \(error)")
+        }
+    }
+    
+    /// 停止播放
+    func stopPlaying() {
+        audioPlayer?.stop()
+        isPlaying = false
+    }
+    
+    // MARK: - Private Methods
+    
+    /// 处理音频缓冲区 - 转换为 PCM 数据发送
+    private func processAudioBuffer(_ buffer: AVAudioPCMBuffer, callback: @escaping (Data) -> Void) {
+        guard let channelData = buffer.int16ChannelData else { return }
+        
+        let frameLength = Int(buffer.frameLength)
+        let data = Data(bytes: channelData[0], count: frameLength * 2)  // Int16 = 2 bytes
+        
+        // 异步发送
+        DispatchQueue.main.async {
+            callback(data)
+        }
+    }
+}
+
+// MARK: - 音频消息结构
+struct AudioStreamMessage: Codable {
+    let sequenceNumber: UInt32
+    let timestamp: TimeInterval
+    let audioData: Data
 }
     
     private var session: MCSession?
@@ -309,6 +510,20 @@ protocol TokenExchangeDelegate: AnyObject {
         }
     }
     
+    /// 自动触发 Token 交换（当与对端建立连接时调用）
+    private func initiateAutomaticTokenExchange(with peerID: MCPeerID) {
+        // 从 UWBProximityProvider 获取本机 NIDiscoveryToken
+        guard let uwbProvider = UWBProximityProvider.shared as UWBProximityProvider?,
+              let myToken = uwbProvider.myDiscoveryToken ?? uwbProvider.session?.discoveryToken else {
+            print("[Peer] Cannot initiate token exchange: no local discovery token")
+            return
+        }
+        
+        // 发送本机 Token 给对端
+        sendDiscoveryToken(myToken, to: peerID)
+        print("[Peer] Auto-initiated token exchange with \(peerID.displayName)")
+    }
+    
     /// 停止 Token 交换计时器
     private func invalidateTokenExchangeTimer() {
         tokenExchangeTimeout?.invalidate()
@@ -342,9 +557,15 @@ extension PeerManager: MCSessionDelegate {
                 )
                 self.connectedDevices.append(device)
                 self.send(message: PeerMessage(type: .handshake), to: [peerID])
+                
+                // 自动触发 Token 交换
+                self.initiateAutomaticTokenExchange(with: peerID)
+                
             case .notConnected:
                 self.isConnecting = false
                 self.connectedDevices.removeAll { $0.peerID == peerID }
+                // 重置该对端的 Token 交换状态
+                self.resetTokenExchangeState(for: peerID.displayName)
             @unknown default: break
             }
         }
