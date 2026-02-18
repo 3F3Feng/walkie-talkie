@@ -35,6 +35,45 @@ enum DistanceLevel: String, CaseIterable {
     }
 }
 
+// MARK: - Provider 类型（用于区分测距方式）
+enum ProviderType: String {
+    case uwb = "UWB"
+    case bluetooth = "蓝牙"
+}
+
+// MARK: - 设备连接状态
+enum DeviceConnectionState: String {
+    case connecting = "连接中"
+    case connected = "已连接"
+    case disconnected = "已断开"
+    
+    var displayText: String { rawValue }
+}
+
+// MARK: - 追踪的设备模型
+class TrackedDevice: Identifiable, ObservableObject {
+    let id: String
+    let peerID: MCPeerID
+    let displayName: String
+    
+    @Published var connectionState: DeviceConnectionState = .connecting
+    @Published var distance: Double = 0.0
+    @Published var distanceLevel: DistanceLevel = .unknown
+    @Published var volume: Float = 0.5
+    @Published var providerType: ProviderType = .bluetooth
+    @Published var rssi: Int = -50
+    @Published var lastSeen: Date = Date()
+    
+    // UWB Token（用于 UWB 测距）
+    var niToken: NIDiscoveryToken?
+    
+    init(peerID: MCPeerID) {
+        self.id = peerID.displayName
+        self.peerID = peerID
+        self.displayName = peerID.displayName
+    }
+}
+
 // MARK: - 应用状态
 enum WalkieState: String {
     case idle = "空闲"
@@ -63,12 +102,6 @@ enum WalkieTalkieError: Error, LocalizedError {
             return "您的设备不支持此功能"
         }
     }
-}
-
-// MARK: - proximity Provider 类型
-enum ProximityProviderType {
-    case uwb
-    case bluetooth
 }
 
 // MARK: - 音频控制器
@@ -346,15 +379,24 @@ class ProximityManager: ObservableObject {
     @Published var distanceLevel: DistanceLevel = .unknown
     @Published var connectedDevices: [String] = []
     @Published var tokenExchangeCompleted: Bool = false
-    @Published var providerType: ProximityProviderType = .bluetooth
+    @Published var providerType: ProviderType = .bluetooth
     @Published var uwbAvailable: Bool = false
     @Published var errorMessage: String?
+    
+    // MARK: - 多设备支持
+    @Published private(set) var activeDevices: [TrackedDevice] = []
+    @Published private(set) var discoverableDevices: [TrackedDevice] = []
+    
+    /// 当前距离（第一个活跃设备的距离，用于兼容旧UI）
+    var currentPrimaryDistance: Double {
+        activeDevices.first?.distance ?? 0.0
+    }
     
     // MARK: - 内部组件
     private let uwbProvider = UWBProximityProvider.shared
     private let bluetoothProvider = BluetoothProximityProvider.shared
     private let audioController = AudioController()
-    private let distanceSmoother = DistanceSmoother()
+    private var distanceSmoothers: [String: DistanceSmoother] = [:]
     private let peerManager = PeerManager.shared
     
     private var cancellables = Set<AnyCancellable>()
@@ -410,7 +452,31 @@ class ProximityManager: ObservableObject {
         peerManager.$connectedDevices
             .receive(on: DispatchQueue.main)
             .sink { [weak self] devices in
-                self?.connectedDevices = devices.map { $0.displayName }
+                guard let self = self else { return }
+                
+                // 更新设备名称列表（保持兼容）
+                self.connectedDevices = devices.map { $0.displayName }
+                
+                // 更新 TrackedDevice 列表
+                for peerDevice in devices {
+                    // 检查是否已存在
+                    if self.activeDevices.contains(where: { $0.id == peerDevice.id }) {
+                        continue
+                    }
+                    
+                    // 创建新的 TrackedDevice
+                    let tracked = TrackedDevice(peerID: peerDevice.peerID)
+                    tracked.connectionState = .connected
+                    
+                    // 根据 UWB 可用性设置测距方式
+                    if self.uwbAvailable {
+                        tracked.providerType = .uwb
+                    } else {
+                        tracked.providerType = .bluetooth
+                    }
+                    
+                    self.activeDevices.append(tracked)
+                }
             }
             .store(in: &cancellables)
     }
@@ -479,7 +545,17 @@ class ProximityManager: ObservableObject {
         uwbProvider.stop()
         bluetoothProvider.stop()
         peerManager.stop()
-        distanceSmoother.reset()
+        
+        // 重置所有设备的距离平滑器
+        for smoother in distanceSmoothers.values {
+            smoother.reset()
+        }
+        distanceSmoothers.removeAll()
+        
+        // 清空设备列表
+        activeDevices.removeAll()
+        discoverableDevices.removeAll()
+        
         currentDistance = 0.0
         currentVolume = 0.5
         tokenExchangeCompleted = false
@@ -514,16 +590,34 @@ class ProximityManager: ObservableObject {
         print("[Manager] NI session configured with peer token from \(peerID.displayName)")
     }
     
-    /// 更新距离（由 Provider 调用）
+    /// 更新距离（由 Provider 调用 - 兼容旧版）
     func updateDistance(_ distance: Double) {
+        // 更新第一个活跃设备的距离
+        if let firstDevice = activeDevices.first {
+            updateDistance(for: firstDevice.id, distance: distance, provider: firstDevice.providerType)
+        }
+    }
+    
+    /// 更新指定设备的距离（多设备支持）
+    func updateDistance(for deviceId: String, distance: Double, provider: ProviderType) {
+        guard let device = activeDevices.first(where: { $0.id == deviceId }) else { return }
+        
+        // 获取或创建设备的距离平滑器
+        if distanceSmoothers[deviceId] == nil {
+            distanceSmoothers[deviceId] = DistanceSmoother()
+        }
+        
         let smoothedDistance = smoothingEnabled 
-            ? distanceSmoother.addSample(distance) 
+            ? distanceSmoothers[deviceId]!.addSample(distance) 
             : distance
         
-        currentDistance = smoothedDistance
-        distanceLevel = DistanceLevel(distance: smoothedDistance)
+        // 更新设备属性
+        device.distance = smoothedDistance
+        device.distanceLevel = DistanceLevel(distance: smoothedDistance)
+        device.providerType = provider
+        device.lastSeen = Date()
         
-        // 计算并应用音量
+        // 计算音量
         let newVolume = audioController.calculateVolume(
             distance: smoothedDistance,
             minDistance: minDistance,
@@ -531,8 +625,12 @@ class ProximityManager: ObservableObject {
             minVolume: minVolume,
             maxVolume: maxVolume
         )
+        device.volume = newVolume
+        
+        // 更新全局属性（保持兼容）
+        currentDistance = smoothedDistance
         currentVolume = newVolume
-        audioController.applyVolume(newVolume)
+        distanceLevel = DistanceLevel(distance: smoothedDistance)
     }
     
     // MARK: - 状态管理

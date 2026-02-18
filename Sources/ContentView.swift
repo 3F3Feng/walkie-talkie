@@ -17,8 +17,8 @@ struct ContentView: View {
                 
                 Spacer()
                 
-                // 核心内容区
-                mainContent
+                // 核心内容区 - 设备列表
+                deviceListContent
                 
                 Spacer()
                 
@@ -55,7 +55,7 @@ struct ContentView: View {
     // MARK: - 状态栏
     private var statusBar: some View {
         HStack {
-            // U1 芯片状态
+            // UWB 状态
             HStack(spacing: 6) {
                 Image(systemName: proximityManager.uwbAvailable ? "antenna.radiowaves.left.and.right" : "antenna.radiowaves.left.and.right.slash")
                     .foregroundColor(proximityManager.uwbAvailable ? .green : .orange)
@@ -66,6 +66,20 @@ struct ContentView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .background(proximityManager.uwbAvailable ? Color.green.opacity(0.2) : Color.orange.opacity(0.2))
+            .cornerRadius(20)
+            
+            Spacer()
+            
+            // 设备数量
+            HStack(spacing: 6) {
+                Image(systemName: "link")
+                    .font(.caption)
+                Text("\(proximityManager.activeDevices.count) 已连")
+                    .font(.caption)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Color.blue.opacity(0.2))
             .cornerRadius(20)
             
             Spacer()
@@ -97,20 +111,60 @@ struct ContentView: View {
         }
     }
     
-    // MARK: - 主内容区
-    private var mainContent: some View {
-        VStack(spacing: 30) {
-            // 错误/警告消息
-            if let errorMsg = proximityManager.errorMessage {
-                errorBanner(message: errorMsg)
+    // MARK: - 设备列表内容
+    @ViewBuilder
+    private var deviceListContent: some View {
+        if proximityManager.activeDevices.isEmpty && proximityManager.discoverableDevices.isEmpty {
+            // 空状态
+            emptyStateView
+        } else {
+            // 设备列表
+            ScrollView {
+                LazyVStack(spacing: 12) {
+                    // 已连接设备
+                    if !proximityManager.activeDevices.isEmpty {
+                        Section {
+                            ForEach(proximityManager.activeDevices) { device in
+                                ConnectedDeviceCard(device: device)
+                            }
+                        } header: {
+                            SectionHeader(title: "已连接设备", icon: "checkmark.circle.fill")
+                        }
+                    }
+                    
+                    // 可发现设备
+                    if !proximityManager.discoverableDevices.isEmpty {
+                        Section {
+                            ForEach(proximityManager.discoverableDevices) { device in
+                                DiscoverableDeviceCard(device: device)
+                            }
+                        } header: {
+                            SectionHeader(title: "可发现设备", icon: "antenna.radiowaves.left.and.right")
+                        }
+                    }
+                    
+                    // 错误/警告消息
+                    if let errorMsg = proximityManager.errorMessage {
+                        errorBanner(message: errorMsg)
+                    }
+                }
+                .padding(.horizontal)
             }
-            
-            // 距离显示卡片
-            distanceCard
-            
-            // 音量显示
-            volumeCard
         }
+    }
+    
+    private var emptyStateView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: proximityManager.state == .discovering ? "antenna.radiowaves.left.and.right" : "iphone")
+                .font(.system(size: 48))
+                .foregroundColor(.gray)
+            
+            Text(proximityManager.state == .discovering ? "正在搜索附近设备..." : "点击「开始对讲」搜索设备")
+                .font(.body)
+                .foregroundColor(.gray)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 60)
     }
     
     private func errorBanner(message: String) -> some View {
@@ -125,108 +179,6 @@ struct ContentView: View {
         .padding(12)
         .background(Color.orange.opacity(0.15))
         .cornerRadius(12)
-    }
-    
-    private var distanceCard: some View {
-        VStack(spacing: 16) {
-            // 距离数值
-            HStack(alignment: .center, spacing: 4) {
-                Text(String(format: "%.2f", proximityManager.currentDistance))
-                    .font(.system(size: 72, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-                
-                Text("m")
-                    .font(.title2)
-                    .foregroundColor(.gray)
-            }
-            
-            // 距离等级标签
-            if proximityManager.currentDistance > 0 {
-                Text(proximityManager.distanceLevel.rawValue)
-                    .font(.title3)
-                    .fontWeight(.semibold)
-                    .foregroundColor(distanceLevelColor)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 8)
-                    .background(distanceLevelColor.opacity(0.2))
-                    .cornerRadius(8)
-            }
-        }
-        .padding(30)
-        .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color.white.opacity(0.05))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(distanceLevelColor.opacity(0.3), lineWidth: 1)
-                )
-        )
-    }
-    
-    private var distanceLevelColor: Color {
-        switch proximityManager.distanceLevel {
-        case .veryNear: return .red
-        case .near: return .orange
-        case .medium: return .yellow
-        case .far: return .green
-        case .veryFar: return .blue
-        case .unknown: return .gray
-        }
-    }
-    
-    private var volumeCard: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Image(systemName: "speaker.wave.1")
-                    .foregroundColor(.gray)
-                
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        // 背景轨道
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.gray.opacity(0.3))
-                            .frame(height: 8)
-                        
-                        // 音量填充
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(volumeGradient)
-                            .frame(width: CGFloat(proximityManager.currentVolume) * geometry.size.width, height: 8)
-                            .animation(.easeInOut(duration: 0.3), value: proximityManager.currentVolume)
-                    }
-                }
-                .frame(height: 8)
-                
-                Image(systemName: "speaker.wave.3")
-                    .foregroundColor(.white)
-            }
-            
-            HStack {
-                Text("音量")
-                    .font(.caption)
-                    .foregroundColor(.gray)
-                
-                Spacer()
-                
-                Text("\(Int(proximityManager.currentVolume * 100))%")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.white)
-            }
-        }
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(0.05))
-        )
-    }
-    
-    private var volumeGradient: LinearGradient {
-        LinearGradient(
-            colors: [.green, .yellow, .red],
-            startPoint: .leading,
-            endPoint: .trailing
-        )
     }
     
     // MARK: - 控制面板
@@ -270,8 +222,7 @@ struct ContentView: View {
         switch proximityManager.state {
         case .idle: return "play.fill"
         case .discovering: return "antenna.radiowaves.left.and.right"
-        case .connected: return "stop.fill"
-        case .transmitting: return "mic.fill"
+        case .connected, .transmitting: return "stop.fill"
         case .error: return "exclamationmark.triangle"
         }
     }
@@ -297,7 +248,6 @@ struct ContentView: View {
     
     private var parameterControls: some View {
         VStack(spacing: 12) {
-            // 滑块标题
             HStack {
                 Text("参数设置")
                     .font(.caption)
@@ -305,7 +255,6 @@ struct ContentView: View {
                 Spacer()
             }
             
-            // 最小距离
             VStack(spacing: 4) {
                 HStack {
                     Text("有效距离范围")
@@ -338,6 +287,192 @@ struct ContentView: View {
         } else {
             proximityManager.stopWalkieTalkie()
         }
+    }
+}
+
+// MARK: - Section Header
+struct SectionHeader: View {
+    let title: String
+    let icon: String
+    
+    var body: some View {
+        HStack {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundColor(.gray)
+            Text(title)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(.gray)
+            Spacer()
+        }
+        .padding(.top, 8)
+    }
+}
+
+// MARK: - 已连接设备卡片
+struct ConnectedDeviceCard: View {
+    @ObservedObject var device: TrackedDevice
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack {
+                // 设备图标
+                Image(systemName: device.providerType == .uwb ? "antenna.radiowaves.left.and.right" : "wave.3.right")
+                    .font(.title2)
+                    .foregroundColor(device.providerType == .uwb ? .green : .orange)
+                    .frame(width: 40)
+                
+                // 设备信息
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(device.displayName)
+                        .font(.body)
+                        .fontWeight(.medium)
+                        .foregroundColor(.white)
+                    
+                    HStack(spacing: 4) {
+                        Text(device.providerType.rawValue)
+                            .font(.caption2)
+                            .foregroundColor(.gray)
+                        Text("•")
+                            .foregroundColor(.gray)
+                        Text(device.connectionState.displayText)
+                            .font(.caption2)
+                            .foregroundColor(connectionStateColor)
+                    }
+                }
+                
+                Spacer()
+                
+                // 距离显示
+                VStack(alignment: .trailing, spacing: 2) {
+                    HStack(alignment: .center, spacing: 2) {
+                        Text(String(format: "%.2f", device.distance))
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                        Text("m")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                    
+                    Text(device.distanceLevel.rawValue)
+                        .font(.caption2)
+                        .foregroundColor(distanceLevelColor)
+                }
+            }
+            
+            // 音量条
+            if device.distance > 0 {
+                VolumeBar(volume: device.volume)
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white.opacity(0.05))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(distanceLevelColor.opacity(0.3), lineWidth: 1)
+                )
+        )
+    }
+    
+    private var connectionStateColor: Color {
+        switch device.connectionState {
+        case .connected: return .green
+        case .connecting: return .orange
+        case .disconnected: return .gray
+        }
+    }
+    
+    private var distanceLevelColor: Color {
+        switch device.distanceLevel {
+        case .veryNear: return .red
+        case .near: return .orange
+        case .medium: return .yellow
+        case .far: return .green
+        case .veryFar: return .blue
+        case .unknown: return .gray
+        }
+    }
+}
+
+// MARK: - 可发现设备卡片
+struct DiscoverableDeviceCard: View {
+    let device: TrackedDevice
+    
+    var body: some View {
+        HStack {
+            Image(systemName: "wave.3.right")
+                .font(.title2)
+                .foregroundColor(.blue)
+                .frame(width: 40)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(device.displayName)
+                    .font(.body)
+                    .fontWeight(.medium)
+                    .foregroundColor(.white)
+                
+                Text("等待连接...")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+            
+            Spacer()
+            
+            ProgressView()
+                .progressViewStyle(CircularProgressViewStyle(tint: .blue))
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.white.opacity(0.05))
+        )
+    }
+}
+
+// MARK: - 音量条
+struct VolumeBar: View {
+    let volume: Float
+    
+    var body: some View {
+        HStack {
+            Image(systemName: "speaker.fill")
+                .font(.caption2)
+                .foregroundColor(.gray)
+            
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.gray.opacity(0.3))
+                        .frame(height: 4)
+                    
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(volumeGradient)
+                        .frame(width: CGFloat(volume) * geometry.size.width, height: 4)
+                }
+            }
+            .frame(height: 4)
+            
+            Image(systemName: "speaker.wave.3.fill")
+                .font(.caption2)
+                .foregroundColor(.white)
+            
+            Text("\(Int(volume * 100))%")
+                .font(.caption2)
+                .foregroundColor(.gray)
+                .frame(width: 35, alignment: .trailing)
+        }
+    }
+    
+    private var volumeGradient: LinearGradient {
+        LinearGradient(
+            colors: [.green, .yellow, .red],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
     }
 }
 
