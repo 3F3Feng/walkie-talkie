@@ -536,6 +536,74 @@ struct AudioStreamMessage: Codable {
         tokenExchangeState = .idle
         invalidateTokenExchangeTimer()
     }
+    
+    // MARK: - Audio Streaming
+    
+    /// 音频流管理器实例
+    private let audioStreamManager = AudioStreamManager.shared
+    
+    /// 音频序列号
+    private var audioSequenceNumber: UInt32 = 0
+    
+    /// 当前正在通话的对端
+    @Published private(set) var currentTalkPeer: MCPeerID?
+    
+    /// 开始 PTT 通话
+    func startPTT() {
+        guard let session = session, !session.connectedPeers.isEmpty else {
+            print("[Peer] No peers connected for PTT")
+            return
+        }
+        
+        do {
+            try audioStreamManager.start()
+            
+            // 开始录制并发送音频数据
+            audioStreamManager.startRecording { [weak self] audioData in
+                self?.sendAudioData(audioData)
+            }
+            
+            print("[Peer] PTT started")
+        } catch {
+            print("[Peer] PTT start failed: \(error)")
+        }
+    }
+    
+    /// 停止 PTT 通话
+    func stopPTT() {
+        audioStreamManager.stopRecording()
+        print("[Peer] PTT stopped")
+    }
+    
+    /// 发送音频数据到所有已连接的对端
+    private func sendAudioData(_ audioData: Data) {
+        guard let session = session, !session.connectedPeers.isEmpty else { return }
+        
+        // 构建音频消息
+        let streamMsg = AudioStreamMessage(
+            sequenceNumber: audioSequenceNumber,
+            timestamp: Date().timeIntervalSince1970,
+            audioData: audioData
+        )
+        
+        do {
+            let data = try JSONEncoder().encode(streamMsg)
+            try session.send(data, toPeers: session.connectedPeers, with: .unreliable)
+            audioSequenceNumber += 1
+        } catch {
+            // 静默失败，避免日志刷屏
+        }
+    }
+    
+    /// 处理接收到的音频流消息
+    private func handleAudioStreamMessage(_ data: Data) {
+        guard let streamMsg = try? JSONDecoder().decode(AudioStreamMessage.self, from: data) else {
+            return
+        }
+        
+        // 播放音频
+        audioStreamManager.playAudioData(streamMsg.audioData)
+    }
 }
 
 // MARK: - MCSessionDelegate
@@ -572,6 +640,7 @@ extension PeerManager: MCSessionDelegate {
     }
     
     func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
+        // 先尝试解析为 PeerMessage
         if let message = try? JSONDecoder().decode(PeerMessage.self, from: data) {
             print("[Peer] Received \(message.type.rawValue) from \(peerID.displayName)")
             
@@ -581,10 +650,18 @@ extension PeerManager: MCSessionDelegate {
                 handleReceivedDiscoveryToken(message, from: peerID)
             case .tokenAck:
                 handleTokenAck(from: peerID)
+            case .audioStream:
+                // 音频流单独处理
+                break
             default:
                 // 其他消息类型可在代理中处理
                 break
             }
+        }
+        
+        // 尝试解析为音频流消息
+        if let _ = try? JSONDecoder().decode(AudioStreamMessage.self, from: data) {
+            handleAudioStreamMessage(data)
         }
     }
     
