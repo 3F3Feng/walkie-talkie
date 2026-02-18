@@ -5,6 +5,7 @@ import Combine
 import AVFoundation
 import simd
 import MultipeerConnectivity
+import UIKit
 
 // MARK: - 协议定义
 protocol ProximityProvider {
@@ -12,6 +13,44 @@ protocol ProximityProvider {
     var isAvailable: Bool { get }
     func start() throws
     func stop()
+}
+
+// MARK: - Token Exchange 状态
+enum TokenExchangeState: String {
+    case idle = "空闲"
+    case waiting = "等待对端Token"
+    case received = "已接收对端Token"
+    case completed = "Token交换完成"
+}
+
+// MARK: - Peer 消息类型
+enum PeerMessageType: String, Codable {
+    case handshake = "handshake"
+    case heartbeat = "heartbeat"
+    case volumeSync = "volumeSync"
+    case disconnect = "disconnect"
+    case discoveryToken = "discoveryToken"
+    case tokenAck = "tokenAck"
+    case audioStream = "audioStream"
+}
+
+struct PeerMessage: Codable {
+    let type: PeerMessageType
+    let timestamp: TimeInterval
+    let payload: [String: String]?
+    
+    init(type: PeerMessageType, payload: [String: String]? = nil) {
+        self.type = type
+        self.timestamp = Date().timeIntervalSince1970
+        self.payload = payload
+    }
+}
+
+// MARK: - 音频流消息
+struct AudioStreamMessage: Codable {
+    let sequenceNumber: UInt32
+    let timestamp: TimeInterval
+    let audioData: Data
 }
 
 // MARK: - 距离等级枚举
@@ -369,7 +408,7 @@ class BluetoothProximityProvider: NSObject, ProximityProvider {
 }
 
 // MARK: - 主控制器
-class ProximityManager: ObservableObject {
+class ProximityManager: NSObject, ObservableObject {
     static let shared = ProximityManager()
     
     // MARK: - Published 属性
@@ -397,7 +436,26 @@ class ProximityManager: ObservableObject {
     private let bluetoothProvider = BluetoothProximityProvider.shared
     private let audioController = AudioController()
     private var distanceSmoothers: [String: DistanceSmoother] = [:]
-    private let peerManager = PeerManager.shared
+    
+    // MARK: - MultipeerConnectivity (从 PeerManager 迁移)
+    private var session: MCSession?
+    private var advertiser: MCNearbyServiceAdvertiser?
+    private var browser: MCNearbyServiceBrowser?
+    private let myPeerID: MCPeerID
+    private let serviceType = "walkie-talkie"
+    
+    // MARK: - 音频流 (从 PeerManager 迁移)
+    private var audioEngine: AVAudioEngine?
+    private var audioPlayer: AVAudioPlayerNode?
+    private var audioFormat: AVAudioFormat?
+    private var audioSequenceNumber: UInt32 = 0
+    @Published var isRecording = false
+    @Published var isPlaying = false
+    
+    // MARK: - Token 交换状态
+    private var receivedTokens: [String: Data] = [:]
+    private var tokenExchangeTimeout: Timer?
+    @Published var tokenExchangeState: TokenExchangeState = .idle
     
     private var cancellables = Set<AnyCancellable>()
     private var currentPeerID: MCPeerID?
@@ -410,17 +468,264 @@ class ProximityManager: ObservableObject {
     var maxVolume: Float = 1.0
     var smoothingEnabled: Bool = true
     
-    private init() {
+    private override init() {
+        // 初始化本机 PeerID (必须在 super.init() 之前)
+        let deviceName = UIDevice.current.name
+        myPeerID = MCPeerID(displayName: deviceName)
+        
+        super.init()
+        
         uwbProvider.configure(with: self)
         bluetoothProvider.configure(with: self)
         setupBindings()
-        setupPeerManagerIntegration()
         
         // 检查 UWB 可用性
         uwbAvailable = uwbProvider.isAvailable
         if !uwbAvailable {
             print("[Manager] UWB not available, will use Bluetooth fallback")
         }
+        
+        print("[Manager] Initialized: \(deviceName)")
+    }
+    
+    // MARK: - MCSession 管理 (从 PeerManager 迁移)
+    
+    private func startMultipeerSession() {
+        guard session == nil else { return }
+        
+        session = MCSession(peer: myPeerID, securityIdentity: nil, encryptionPreference: .required)
+        session?.delegate = self
+        
+        // 开始广播和发现
+        startAdvertising()
+        startBrowsing()
+        
+        print("[Manager] Multipeer session started")
+    }
+    
+    private func stopMultipeerSession() {
+        stopAdvertising()
+        stopBrowsing()
+        session?.disconnect()
+        session = nil
+        discoveredPeers.removeAll()
+        print("[Manager] Multipeer session stopped")
+    }
+    
+    @Published private(set) var discoveredPeers: [MCPeerID] = []
+    
+    private func startAdvertising() {
+        advertiser = MCNearbyServiceAdvertiser(peer: myPeerID, discoveryInfo: ["version": "1.0"], serviceType: serviceType)
+        advertiser?.delegate = self
+        advertiser?.startAdvertisingPeer()
+        print("[Manager] Started advertising")
+    }
+    
+    private func stopAdvertising() {
+        advertiser?.stopAdvertisingPeer()
+        advertiser = nil
+    }
+    
+    private func startBrowsing() {
+        browser = MCNearbyServiceBrowser(peer: myPeerID, serviceType: serviceType)
+        browser?.delegate = self
+        browser?.startBrowsingForPeers()
+        print("[Manager] Started browsing")
+    }
+    
+    private func stopBrowsing() {
+        browser?.stopBrowsingForPeers()
+        browser = nil
+    }
+    
+    // MARK: - 音频流方法 (从 PeerManager 迁移)
+    
+    private func setupAudioEngine() throws {
+        guard audioEngine == nil else { return }
+        
+        try audioController.configureAudioSession()
+        
+        audioEngine = AVAudioEngine()
+        guard let engine = audioEngine else { return }
+        
+        let inputFormat = engine.inputNode.outputFormat(forBus: 0)
+        audioFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: inputFormat.sampleRate, channels: 1, interleaved: true)
+        
+        audioPlayer = AVAudioPlayerNode()
+        engine.attach(audioPlayer!)
+        
+        if let player = audioPlayer, let format = audioFormat {
+            engine.connect(player, to: engine.mainMixerNode, format: format)
+        }
+        
+        try engine.start()
+        print("[Manager] Audio engine started")
+    }
+    
+    private func stopAudioEngine() {
+        audioEngine?.stop()
+        audioEngine = nil
+        audioPlayer = nil
+    }
+    
+    /// 开始 PTT 通话
+    func startPTT() {
+        guard let session = session, !session.connectedPeers.isEmpty else {
+            print("[Manager] No peers connected for PTT")
+            return
+        }
+        
+        do {
+            try setupAudioEngine()
+            
+            audioEngine?.inputNode.installTap(onBus: 0, bufferSize: 1024, format: nil) { [weak self] buffer, _ in
+                self?.sendAudioBuffer(buffer)
+            }
+            
+            audioPlayer?.play()
+            isRecording = true
+            print("[Manager] PTT started")
+        } catch {
+            print("[Manager] PTT start failed: \(error)")
+        }
+    }
+    
+    /// 停止 PTT 通话
+    func stopPTT() {
+        audioEngine?.inputNode.removeTap(onBus: 0)
+        isRecording = false
+        print("[Manager] PTT stopped")
+    }
+    
+    private func sendAudioBuffer(_ buffer: AVAudioPCMBuffer) {
+        guard let session = session, !session.connectedPeers.isEmpty,
+              let channelData = buffer.int16ChannelData else { return }
+        
+        let frameLength = Int(buffer.frameLength)
+        let audioData = Data(bytes: channelData[0], count: frameLength * 2)
+        
+        let streamMsg = AudioStreamMessage(sequenceNumber: audioSequenceNumber, timestamp: Date().timeIntervalSince1970, audioData: audioData)
+        
+        do {
+            let data = try JSONEncoder().encode(streamMsg)
+            try session.send(data, toPeers: session.connectedPeers, with: .unreliable)
+            audioSequenceNumber += 1
+        } catch {
+            // 静默失败
+        }
+    }
+    
+    private func handleReceivedAudio(_ data: Data) {
+        guard let streamMsg = try? JSONDecoder().decode(AudioStreamMessage.self, from: data) else { return }
+        
+        guard let player = audioPlayer, let format = audioFormat else { return }
+        
+        do {
+            let audioBuffer = try AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(streamMsg.audioData.count / 2))
+            streamMsg.audioData.withUnsafeBytes { rawBufferPointer in
+                if let baseAddress = rawBufferPointer.baseAddress {
+                    let int16Pointer = baseAddress.assumingMemoryBound(to: Int16.self)
+                    let frameCount = AVAudioFrameCount(streamMsg.audioData.count / 2)
+                    audioBuffer?.frameLength = frameCount
+                    audioBuffer?.int16ChannelData?[0].update(from: int16Pointer, count: Int(frameCount))
+                }
+            }
+            
+            if let buffer = audioBuffer {
+                player.scheduleBuffer(buffer, completionHandler: nil)
+            }
+            
+            if !player.isPlaying {
+                player.play()
+            }
+            
+            isPlaying = true
+        } catch {
+            print("[Manager] Audio playback error: \(error)")
+        }
+    }
+    
+    // MARK: - Token 交换方法 (从 PeerManager 迁移)
+    
+    private func sendDiscoveryToken(_ token: NIDiscoveryToken, to peerID: MCPeerID) {
+        guard let session = session else { return }
+        
+        do {
+            let tokenData = try NSKeyedArchiver.archivedData(withRootObject: token, requiringSecureCoding: true)
+            let base64Token = tokenData.base64EncodedString()
+            let message = PeerMessage(type: .discoveryToken, payload: ["token": base64Token, "sender": myPeerID.displayName])
+            
+            let data = try JSONEncoder().encode(message)
+            try session.send(data, toPeers: [peerID], with: .reliable)
+            
+            tokenExchangeState = .waiting
+            startTokenExchangeTimer()
+            print("[Manager] DiscoveryToken sent to \(peerID.displayName)")
+        } catch {
+            print("[Manager] Failed to send token: \(error)")
+            tokenExchangeState = .idle
+        }
+    }
+    
+    private func handleReceivedToken(_ message: PeerMessage, from peerID: MCPeerID) {
+        guard let payload = message.payload, let base64Token = payload["token"],
+              let tokenData = Data(base64Encoded: base64Token),
+              let token = try? NSKeyedUnarchiver.unarchivedObject(ofClass: NIDiscoveryToken.self, from: tokenData) else {
+            print("[Manager] Invalid token received")
+            return
+        }
+        
+        receivedTokens[peerID.displayName] = tokenData
+        tokenExchangeState = .received
+        
+        // 触发 Token 交换
+        if let myToken = uwbProvider.myDiscoveryToken ?? uwbProvider.session?.discoveryToken {
+            configureNISession(withPeerToken: token, fromPeer: peerID)
+            sendTokenAck(to: peerID)
+        }
+        
+        print("[Manager] Received token from \(peerID.displayName)")
+    }
+    
+    private func sendTokenAck(to peerID: MCPeerID) {
+        let ack = PeerMessage(type: .tokenAck, payload: ["ack": "true"])
+        send(message: ack, to: [peerID])
+        
+        if tokenExchangeState == .received {
+            tokenExchangeState = .completed
+            invalidateTokenExchangeTimer()
+        }
+    }
+    
+    private func startTokenExchangeTimer() {
+        tokenExchangeTimeout?.invalidate()
+        tokenExchangeTimeout = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: false) { [weak self] _ in
+            self?.tokenExchangeState = .idle
+        }
+    }
+    
+    private func invalidateTokenExchangeTimer() {
+        tokenExchangeTimeout?.invalidate()
+        tokenExchangeTimeout = nil
+    }
+    
+    private func send(message: PeerMessage, to peers: [MCPeerID]? = nil) {
+        guard let session = session else { return }
+        do {
+            let data = try JSONEncoder().encode(message)
+            let targets = peers ?? session.connectedPeers
+            try session.send(data, toPeers: targets, with: .reliable)
+        } catch {
+            print("[Manager] Send failed: \(error)")
+        }
+    }
+    
+    private func initiateAutomaticTokenExchange(with peerID: MCPeerID) {
+        guard let myToken = uwbProvider.myDiscoveryToken ?? uwbProvider.session?.discoveryToken else {
+            print("[Manager] No local token for exchange")
+            return
+        }
+        sendDiscoveryToken(myToken, to: peerID)
     }
     
     private func setupBindings() {
@@ -439,44 +744,6 @@ class ProximityManager: ObservableObject {
             .sink { [weak self] distance in
                 guard self?.providerType == .bluetooth else { return }
                 self?.updateDistance(distance)
-            }
-            .store(in: &cancellables)
-    }
-    
-    /// 设置与 PeerManager 的集成
-    private func setupPeerManagerIntegration() {
-        // 设置 Token 交换委托
-        peerManager.tokenExchangeDelegate = self
-        
-        // 监听 PeerManager 连接状态变化
-        peerManager.$connectedDevices
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] devices in
-                guard let self = self else { return }
-                
-                // 更新设备名称列表（保持兼容）
-                self.connectedDevices = devices.map { $0.displayName }
-                
-                // 更新 TrackedDevice 列表
-                for peerDevice in devices {
-                    // 检查是否已存在
-                    if self.activeDevices.contains(where: { $0.id == peerDevice.id }) {
-                        continue
-                    }
-                    
-                    // 创建新的 TrackedDevice
-                    let tracked = TrackedDevice(peerID: peerDevice.peerID)
-                    tracked.connectionState = .connected
-                    
-                    // 根据 UWB 可用性设置测距方式
-                    if self.uwbAvailable {
-                        tracked.providerType = .uwb
-                    } else {
-                        tracked.providerType = .bluetooth
-                    }
-                    
-                    self.activeDevices.append(tracked)
-                }
             }
             .store(in: &cancellables)
     }
@@ -505,8 +772,8 @@ class ProximityManager: ObservableObject {
             return
         }
         
-        // 启动 PeerManager（MultipeerConnectivity）
-        peerManager.start()
+        // 启动 MultipeerConnectivity 会话
+        startMultipeerSession()
         
         // 尝试启动 UWB，如果不可用则降级到蓝牙
         if uwbProvider.isAvailable {
@@ -544,7 +811,8 @@ class ProximityManager: ObservableObject {
     func stopWalkieTalkie() {
         uwbProvider.stop()
         bluetoothProvider.stop()
-        peerManager.stop()
+        stopMultipeerSession()
+        stopAudioEngine()
         
         // 重置所有设备的距离平滑器
         for smoother in distanceSmoothers.values {
@@ -572,7 +840,7 @@ class ProximityManager: ObservableObject {
         }
         
         currentPeerID = peerID
-        peerManager.sendDiscoveryToken(token, to: peerID)
+        sendDiscoveryToken(token, to: peerID)
         
         print("[Manager] Initiating token exchange with \(peerID.displayName)")
     }
@@ -642,29 +910,82 @@ class ProximityManager: ObservableObject {
     }
 }
 
-// MARK: - TokenExchangeDelegate
-extension ProximityManager: TokenExchangeDelegate {
-    /// 当从对端收到 NIDiscoveryToken 时调用
-    func peerManager(_ peerManager: PeerManager, didReceiveDiscoveryToken token: NIDiscoveryToken, fromPeer peerID: MCPeerID) {
-        print("[Manager] Received discovery token from \(peerID.displayName)")
-        
-        // 使用接收到的 Token 配置 NI 会话
-        // 这是 Token 交换流程的关键步骤
-        configureNISession(withPeerToken: token, fromPeer: peerID)
-    }
-    
-    /// Token 交换完成时调用
-    func peerManager(_ peerManager: PeerManager, didCompleteTokenExchangeWith peerID: MCPeerID) {
-        print("[Manager] Token exchange completed with \(peerID.displayName)")
-        tokenExchangeCompleted = true
-        
-        // 双方都已交换 Token，现在可以开始 UWB 测距
-        if let myToken = uwbProvider.myDiscoveryToken ?? uwbProvider.session?.discoveryToken {
-            // 如果还没有配置对端 Token，现在配置
-            if !tokenExchangeCompleted {
-                // 检查是否已有对端 Token
-                // 这里可以根据需要实现自动配置
+// MARK: - MCSessionDelegate
+extension ProximityManager: MCSessionDelegate {
+    func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
+        DispatchQueue.main.async {
+            switch state {
+            case .connecting:
+                break
+            case .connected:
+                let tracked = TrackedDevice(peerID: peerID)
+                tracked.connectionState = .connected
+                tracked.providerType = self.uwbAvailable ? .uwb : .bluetooth
+                self.activeDevices.append(tracked)
+                self.discoverableDevices.removeAll { $0.id == peerID.displayName }
+                
+                // 自动触发 Token 交换
+                self.initiateAutomaticTokenExchange(with: peerID)
+                
+            case .notConnected:
+                self.activeDevices.removeAll { $0.id == peerID.displayName }
+                self.discoverableDevices.removeAll { $0.id == peerID.displayName }
+                self.receivedTokens.removeValue(forKey: peerID.displayName)
+                self.tokenExchangeState = .idle
+            @unknown default:
+                break
             }
         }
+    }
+    
+    func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
+        if let message = try? JSONDecoder().decode(PeerMessage.self, from: data) {
+            switch message.type {
+            case .discoveryToken:
+                handleReceivedToken(message, from: peerID)
+            case .tokenAck:
+                if tokenExchangeState == .waiting {
+                    tokenExchangeState = .completed
+                    invalidateTokenExchangeTimer()
+                }
+            case .audioStream:
+                handleReceivedAudio(data)
+            default:
+                break
+            }
+        }
+    }
+    
+    func session(_ session: MCSession, didReceive stream: InputStream, withName: String, fromPeer: MCPeerID) {}
+    func session(_ session: MCSession, didStartReceivingResourceWithName: String, fromPeer: MCPeerID, with: Progress) {}
+    func session(_ session: MCSession, didFinishReceivingResourceWithName: String, fromPeer: MCPeerID, at: URL?, withError: Error?) {}
+}
+
+// MARK: - MCNearbyServiceAdvertiserDelegate
+extension ProximityManager: MCNearbyServiceAdvertiserDelegate {
+    func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
+        invitationHandler(true, session)
+    }
+}
+
+// MARK: - MCNearbyServiceBrowserDelegate
+extension ProximityManager: MCNearbyServiceBrowserDelegate {
+    func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String: String]?) {
+        if !discoveredPeers.contains(where: { $0.displayName == peerID.displayName }) {
+            discoveredPeers.append(peerID)
+            
+            // 自动邀请
+            browser.invitePeer(peerID, to: session!, withContext: nil, timeout: 30)
+            
+            // 添加到可发现设备
+            let tracked = TrackedDevice(peerID: peerID)
+            tracked.connectionState = .connecting
+            discoverableDevices.append(tracked)
+        }
+    }
+    
+    func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
+        discoveredPeers.removeAll { $0.displayName == peerID.displayName }
+        discoverableDevices.removeAll { $0.id == peerID.displayName }
     }
 }
