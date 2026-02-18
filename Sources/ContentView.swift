@@ -57,15 +57,15 @@ struct ContentView: View {
         HStack {
             // U1 芯片状态
             HStack(spacing: 6) {
-                Image(systemName: "antenna.radiowaves.left.and.right")
-                    .foregroundColor(.green)
-                Text("U1")
+                Image(systemName: proximityManager.uwbAvailable ? "antenna.radiowaves.left.and.right" : "antenna.radiowaves.left.and.right.slash")
+                    .foregroundColor(proximityManager.uwbAvailable ? .green : .orange)
+                Text(proximityManager.uwbAvailable ? "UWB" : "BT")
                     .font(.caption)
                     .fontWeight(.bold)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(Color.green.opacity(0.2))
+            .background(proximityManager.uwbAvailable ? Color.green.opacity(0.2) : Color.orange.opacity(0.2))
             .cornerRadius(20)
             
             Spacer()
@@ -100,12 +100,31 @@ struct ContentView: View {
     // MARK: - 主内容区
     private var mainContent: some View {
         VStack(spacing: 30) {
+            // 错误/警告消息
+            if let errorMsg = proximityManager.errorMessage {
+                errorBanner(message: errorMsg)
+            }
+            
             // 距离显示卡片
             distanceCard
             
             // 音量显示
             volumeCard
         }
+    }
+    
+    private func errorBanner(message: String) -> some View {
+        HStack {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(.orange)
+            Text(message)
+                .font(.caption)
+                .foregroundColor(.white)
+            Spacer()
+        }
+        .padding(12)
+        .background(Color.orange.opacity(0.15))
+        .cornerRadius(12)
     }
     
     private var distanceCard: some View {

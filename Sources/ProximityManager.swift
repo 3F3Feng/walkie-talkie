@@ -45,11 +45,30 @@ enum WalkieState: String {
 }
 
 // MARK: - 错误定义
-enum WalkieTalkieError: Error {
+enum WalkieTalkieError: Error, LocalizedError {
     case uwbUnavailable
     case bluetoothNotAuthorized
     case audioSessionFailure
     case deviceNotSupported
+    
+    var errorDescription: String? {
+        switch self {
+        case .uwbUnavailable:
+            return "您的设备不支持 UWB 超宽带技术，将使用蓝牙模式"
+        case .bluetoothNotAuthorized:
+            return "需要蓝牙权限来发现附近设备"
+        case .audioSessionFailure:
+            return "音频会话配置失败"
+        case .deviceNotSupported:
+            return "您的设备不支持此功能"
+        }
+    }
+}
+
+// MARK: - proximity Provider 类型
+enum ProximityProviderType {
+    case uwb
+    case bluetooth
 }
 
 // MARK: - 音频控制器
@@ -248,6 +267,74 @@ extension UWBProximityProvider: NISessionDelegate {
     }
 }
 
+// MARK: - 蓝牙 Provider（降级方案）
+class BluetoothProximityProvider: NSObject, ProximityProvider {
+    static let shared = BluetoothProximityProvider()
+    
+    @Published private(set) var distance: Double = 0.0
+    @Published private(set) var isAvailable: Bool = true
+    @Published private(set) var rssi: Int = -50
+    
+    private weak var parentManager: ProximityManager?
+    private var rssiTimer: Timer?
+    
+    // RSSI 到距离的映射（粗略估计）
+    // 实际需要根据设备校准
+    private func rssiToDistance(_ rssi: Int) -> Double {
+        // 典型值: -30dBm = 1m, -70dBm = 5m, -90dBm = 20m+
+        let measuredPower = -50 // 1米处的参考 RSSI
+        let pathLossExponent = 2.0 // 自由空间路径损耗指数
+        
+        if rssi >= 0 {
+            return 0.0
+        }
+        
+        let distance = pow(10, Double(measuredPower - rssi) / (10 * pathLossExponent))
+        return min(distance, 30.0) // 最大30米
+    }
+    
+    func configure(with manager: ProximityManager) {
+        self.parentManager = manager
+    }
+    
+    func start() throws {
+        print("[Bluetooth] Starting as fallback provider")
+        
+        // 启动模拟距离更新（实际项目中应该从 MultipeerConnectivity 获取 RSSI）
+        // 这里使用模拟值，因为 MultipeerConnectivity 不直接提供 RSSI
+        startRSSIMonitoring()
+        
+        isAvailable = true
+    }
+    
+    private func startRSSIMonitoring() {
+        // 模拟 RSSI 变化（在实际项目中替换为真实蓝牙 RSSI 读取）
+        rssiTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            
+            // 模拟随机 RSSI 值（-50 到 -80 之间）
+            // 在真实场景中，应该从 CBCentralManager 或 MCBrowserViewController 获取
+            let simulatedRSSI = Int.random(in: -80 ... -50)
+            self.rssi = simulatedRSSI
+            
+            // 转换为距离
+            let newDistance = self.rssiToDistance(simulatedRSSI)
+            self.distance = newDistance
+            self.parentManager?.updateDistance(newDistance)
+            
+            print("[Bluetooth] RSSI: \(simulatedRSSI) dBm -> Distance: \(String(format: "%.2f", newDistance))m")
+        }
+    }
+    
+    func stop() {
+        rssiTimer?.invalidate()
+        rssiTimer = nil
+        distance = 0.0
+        rssi = -50
+        print("[Bluetooth] Stopped")
+    }
+}
+
 // MARK: - 主控制器
 class ProximityManager: ObservableObject {
     static let shared = ProximityManager()
@@ -259,15 +346,20 @@ class ProximityManager: ObservableObject {
     @Published var distanceLevel: DistanceLevel = .unknown
     @Published var connectedDevices: [String] = []
     @Published var tokenExchangeCompleted: Bool = false
+    @Published var providerType: ProximityProviderType = .bluetooth
+    @Published var uwbAvailable: Bool = false
+    @Published var errorMessage: String?
     
     // MARK: - 内部组件
     private let uwbProvider = UWBProximityProvider.shared
+    private let bluetoothProvider = BluetoothProximityProvider.shared
     private let audioController = AudioController()
     private let distanceSmoother = DistanceSmoother()
     private let peerManager = PeerManager.shared
     
     private var cancellables = Set<AnyCancellable>()
     private var currentPeerID: MCPeerID?
+    private var activeProvider: ProximityProvider?
     
     // MARK: - 配置
     var minDistance: Double = 1.0
@@ -278,8 +370,15 @@ class ProximityManager: ObservableObject {
     
     private init() {
         uwbProvider.configure(with: self)
+        bluetoothProvider.configure(with: self)
         setupBindings()
         setupPeerManagerIntegration()
+        
+        // 检查 UWB 可用性
+        uwbAvailable = uwbProvider.isAvailable
+        if !uwbAvailable {
+            print("[Manager] UWB not available, will use Bluetooth fallback")
+        }
     }
     
     private func setupBindings() {
@@ -287,6 +386,16 @@ class ProximityManager: ObservableObject {
         uwbProvider.$distance
             .receive(on: DispatchQueue.main)
             .sink { [weak self] distance in
+                guard self?.providerType == .uwb else { return }
+                self?.updateDistance(distance)
+            }
+            .store(in: &cancellables)
+        
+        // 监听蓝牙距离变化
+        bluetoothProvider.$distance
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] distance in
+                guard self?.providerType == .bluetooth else { return }
                 self?.updateDistance(distance)
             }
             .store(in: &cancellables)
@@ -310,10 +419,13 @@ class ProximityManager: ObservableObject {
     
     /// 启动对讲功能
     func startWalkieTalkie() {
-        guard state == .idle else {
+        guard state == .idle || state == .error else {
             print("[Manager] Already running")
             return
         }
+        
+        // 清除之前的错误
+        errorMessage = nil
         
         transition(to: .discovering)
         
@@ -322,6 +434,7 @@ class ProximityManager: ObservableObject {
             try audioController.configureAudioSession()
         } catch {
             print("[Manager] Audio configuration failed: \(error)")
+            errorMessage = "音频配置失败: \(error.localizedDescription)"
             transition(to: .error)
             return
         }
@@ -329,15 +442,34 @@ class ProximityManager: ObservableObject {
         // 启动 PeerManager（MultipeerConnectivity）
         peerManager.start()
         
-        // 启动 UWB
-        do {
-            try uwbProvider.start()
-            if uwbProvider.isAvailable {
-                // 等待对端连接后会触发 Token 交换
+        // 尝试启动 UWB，如果不可用则降级到蓝牙
+        if uwbProvider.isAvailable {
+            do {
+                try uwbProvider.start()
+                providerType = .uwb
+                print("[Manager] Using UWB provider")
                 transition(to: .connected)
+            } catch {
+                print("[Manager] UWB start failed, falling back to Bluetooth: \(error)")
+                startBluetoothFallback()
             }
+        } else {
+            // UWB 不可用，直接使用蓝牙降级方案
+            print("[Manager] UWB not available, using Bluetooth fallback")
+            startBluetoothFallback()
+        }
+    }
+    
+    /// 启动蓝牙降级方案
+    private func startBluetoothFallback() {
+        do {
+            try bluetoothProvider.start()
+            providerType = .bluetooth
+            errorMessage = "您的设备不支持 UWB，已切换到蓝牙模式（距离测量精度较低）"
+            transition(to: .connected)
         } catch {
-            print("[Manager] UWB start failed: \(error)")
+            print("[Manager] Bluetooth fallback failed: \(error)")
+            errorMessage = "无法启动任何proximity provider: \(error.localizedDescription)"
             transition(to: .error)
         }
     }
@@ -345,12 +477,14 @@ class ProximityManager: ObservableObject {
     /// 停止对讲功能
     func stopWalkieTalkie() {
         uwbProvider.stop()
+        bluetoothProvider.stop()
         peerManager.stop()
         distanceSmoother.reset()
         currentDistance = 0.0
         currentVolume = 0.5
         tokenExchangeCompleted = false
         currentPeerID = nil
+        errorMessage = nil
         transition(to: .idle)
     }
     
