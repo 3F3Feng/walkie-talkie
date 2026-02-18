@@ -1,0 +1,27 @@
+# Build
+.build/
+DerivedData/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+*.app
+*.dSYM
+
+# Xcode
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+xcuserdata/
+*.xccheckout
+*.moved-aside
+
+# Swift Package Manager
+.swiftpm/
+
+# OS
+.DS_Store
+*.swp
+*~
+
+# Logs
+*.log
