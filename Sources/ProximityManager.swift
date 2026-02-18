@@ -392,7 +392,7 @@ class BluetoothProximityProvider: NSObject, ProximityProvider {
             // 转换为距离
             let newDistance = self.rssiToDistance(simulatedRSSI)
             self.distance = newDistance
-            self.parentManager?.updateDistance(newDistance)
+            self.parentManager?.updateDistance(newDistance, deviceId: nil)
             
             print("[Bluetooth] RSSI: \(simulatedRSSI) dBm -> Distance: \(String(format: "%.2f", newDistance))m")
         }
@@ -859,11 +859,19 @@ class ProximityManager: NSObject, ObservableObject {
     }
     
     /// 更新距离（由 Provider 调用 - 兼容旧版）
-    func updateDistance(_ distance: Double) {
-        // 更新第一个活跃设备的距离
-        if let firstDevice = activeDevices.first {
-            updateDistance(for: firstDevice.id, distance: distance, provider: firstDevice.providerType)
+    func updateDistance(_ distance: Double, deviceId: String? = nil) {
+        // 如果指定了设备ID，使用它；否则使用第一个活跃设备
+        let targetId = deviceId ?? activeDevices.first?.id
+        guard let targetDeviceId = targetId else {
+            print("[Distance] ⚠️ 无设备可更新距离: \(String(format: "%.2f", distance))m")
+            return
         }
+        
+        // 确定 Provider 类型
+        let provider: ProviderType = uwbAvailable ? .uwb : .bluetooth
+        updateDistance(for: targetDeviceId, distance: distance, provider: provider)
+        
+        print("[Distance] 📍 \(targetDeviceId): \(String(format: "%.2f", distance))m [\(provider.rawValue)]")
     }
     
     /// 更新指定设备的距离（多设备支持）
@@ -914,24 +922,40 @@ class ProximityManager: NSObject, ObservableObject {
 extension ProximityManager: MCSessionDelegate {
     func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
         DispatchQueue.main.async {
+            print("[Session] 📱 设备 \(peerID.displayName) 状态变化: \(state.rawValue)")
+            
             switch state {
             case .connecting:
-                break
+                print("[Session] ⏳ 正在连接: \(peerID.displayName)")
+                
             case .connected:
+                print("[Session] ✅ 已连接: \(peerID.displayName)")
+                
                 let tracked = TrackedDevice(peerID: peerID)
                 tracked.connectionState = .connected
                 tracked.providerType = self.uwbAvailable ? .uwb : .bluetooth
+                
+                // 先添加到可发现设备（如果不在的话）
+                if !self.discoverableDevices.contains(where: { $0.id == peerID.displayName }) {
+                    self.discoverableDevices.append(tracked)
+                }
+                
+                // 移动到已连接设备
                 self.activeDevices.append(tracked)
                 self.discoverableDevices.removeAll { $0.id == peerID.displayName }
+                
+                print("[Session] 📋 已连接设备: \(self.activeDevices.count), 可发现设备: \(self.discoverableDevices.count)")
                 
                 // 自动触发 Token 交换
                 self.initiateAutomaticTokenExchange(with: peerID)
                 
             case .notConnected:
+                print("[Session] 🔌 已断开: \(peerID.displayName)")
                 self.activeDevices.removeAll { $0.id == peerID.displayName }
                 self.discoverableDevices.removeAll { $0.id == peerID.displayName }
                 self.receivedTokens.removeValue(forKey: peerID.displayName)
                 self.tokenExchangeState = .idle
+                
             @unknown default:
                 break
             }
@@ -971,20 +995,26 @@ extension ProximityManager: MCNearbyServiceAdvertiserDelegate {
 // MARK: - MCNearbyServiceBrowserDelegate
 extension ProximityManager: MCNearbyServiceBrowserDelegate {
     func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String: String]?) {
+        print("[Browser] 🔍 发现设备: \(peerID.displayName)")
+        
         if !discoveredPeers.contains(where: { $0.displayName == peerID.displayName }) {
             discoveredPeers.append(peerID)
             
-            // 自动邀请
-            browser.invitePeer(peerID, to: session!, withContext: nil, timeout: 30)
-            
-            // 添加到可发现设备
+            // 添加到可发现设备列表
             let tracked = TrackedDevice(peerID: peerID)
             tracked.connectionState = .connecting
             discoverableDevices.append(tracked)
+            
+            print("[Browser] ➕ 已添加到可发现设备: \(peerID.displayName), 当前: \(discoverableDevices.count) 个")
+            
+            // 自动邀请连接
+            browser.invitePeer(peerID, to: session!, withContext: nil, timeout: 30)
+            print("[Browser] 📤 已发送连接邀请给: \(peerID.displayName)")
         }
     }
     
     func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
+        print("[Browser] ❌ 丢失设备: \(peerID.displayName)")
         discoveredPeers.removeAll { $0.displayName == peerID.displayName }
         discoverableDevices.removeAll { $0.id == peerID.displayName }
     }
