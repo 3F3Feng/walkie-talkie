@@ -1,5 +1,6 @@
 import Foundation
 import MultipeerConnectivity
+import NearbyInteraction  // 需要 NIDiscoveryToken
 import UIKit
 import Combine
 
@@ -28,6 +29,8 @@ enum PeerMessageType: String, Codable {
     case heartbeat = "heartbeat"
     case volumeSync = "volumeSync"
     case disconnect = "disconnect"
+    case discoveryToken = "discoveryToken"     // 新增：NIDiscoveryToken 消息
+    case tokenAck = "tokenAck"                // 新增：Token 确认
 }
 
 struct PeerMessage: Codable {
@@ -51,6 +54,30 @@ class PeerManager: NSObject, ObservableObject {
     @Published private(set) var isAdvertising = false
     @Published private(set) var isBrowsing = false
     @Published private(set) var isConnecting = false
+    @Published private(set) var tokenExchangeState: TokenExchangeState = .idle
+    
+    // MARK: - Token Exchange 委托
+    weak var tokenExchangeDelegate: TokenExchangeDelegate?
+    
+    // MARK: - 内部状态
+    private var pendingToken: Data?  // 等待发送的 Token
+    private var receivedTokens: [String: Data] = [:]  // 已接收的对端 Token [peerID: tokenData]
+    private var tokenExchangeTimeout: Timer?
+
+// MARK: - Token Exchange 相关定义
+enum TokenExchangeState: String {
+    case idle = "空闲"
+    case waiting = "等待对端Token"
+    case received = "已接收对端Token"
+    case completed = "Token交换完成"
+}
+
+protocol TokenExchangeDelegate: AnyObject {
+    /// 当从对端收到 NIDiscoveryToken 时调用
+    func peerManager(_ peerManager: PeerManager, didReceiveDiscoveryToken token: NIDiscoveryToken, fromPeer peerID: MCPeerID)
+    /// Token 交换完成
+    func peerManager(_ peerManager: PeerManager, didCompleteTokenExchangeWith peerID: MCPeerID)
+}
     
     private var session: MCSession?
     private var serviceAdvertiser: MCNearbyServiceAdvertiser?
@@ -164,6 +191,136 @@ class PeerManager: NSObject, ObservableObject {
         ])
         send(message: msg)
     }
+    
+    // MARK: - NIDiscoveryToken Exchange
+    
+    /// 发送本地 NIDiscoveryToken 到指定对端
+    /// - Parameters:
+    ///   - token: 本地生成的 NIDiscoveryToken
+    ///   - peerID: 目标对端
+    func sendDiscoveryToken(_ token: NIDiscoveryToken, to peerID: MCPeerID) {
+        guard let session = session else {
+            print("[Peer] Cannot send token: no session")
+            return
+        }
+        
+        // 将 Token 编码为 Data
+        do {
+            // NIDiscoveryToken 使用 NSKeyedArchiver 编码
+            let tokenData = try NSKeyedArchiver.archivedData(withRootObject: token, requiringSecureCoding: true)
+            
+            // 创建包含 Token 的消息
+            let base64Token = tokenData.base64EncodedString()
+            let message = PeerMessage(
+                type: .discoveryToken,
+                payload: [
+                    "token": base64Token,
+                    "sender": myPeerID.displayName
+                ]
+            )
+            
+            // 发送消息
+            let data = try JSONEncoder().encode(message)
+            try session.send(data, toPeers: [peerID], with: .reliable)
+            
+            print("[Peer] DiscoveryToken sent to \(peerID.displayName)")
+            
+            // 更新状态为等待对端 Token
+            tokenExchangeState = .waiting
+            startTokenExchangeTimer()
+            
+        } catch {
+            print("[Peer] Failed to send DiscoveryToken: \(error)")
+            tokenExchangeState = .idle
+            tokenExchangeDelegate?.peerManager(self, didCompleteTokenExchangeWith: peerID)
+        }
+    }
+    
+    /// 处理接收到的 NIDiscoveryToken
+    private func handleReceivedDiscoveryToken(_ message: PeerMessage, from peerID: MCPeerID) {
+        guard let payload = message.payload,
+              let base64Token = payload["token"] else {
+            print("[Peer] Invalid token message received")
+            return
+        }
+        
+        // 解码 Token
+        guard let tokenData = Data(base64Encoded: base64Token) else {
+            print("[Peer] Failed to decode token data")
+            return
+        }
+        
+        do {
+            // 使用 NSKeyedUnarchiver 解码 NIDiscoveryToken
+            guard let token = try NSKeyedUnarchiver.unarchivedObject(ofClass: NIDiscoveryToken.self, from: tokenData) else {
+                print("[Peer] Failed to unarchive NIDiscoveryToken")
+                return
+            }
+            
+            print("[Peer] Received DiscoveryToken from \(peerID.displayName)")
+            
+            // 存储接收到的 Token
+            receivedTokens[peerID.displayName] = tokenData
+            tokenExchangeState = .received
+            
+            // 调用委托告知 Token 已接收
+            tokenExchangeDelegate?.peerManager(self, didReceiveDiscoveryToken: token, fromPeer: peerID)
+            
+            // 发送确认
+            sendTokenAck(to: peerID)
+            
+        } catch {
+            print("[Peer] Failed to decode NIDiscoveryToken: \(error)")
+        }
+    }
+    
+    /// 发送 Token 确认消息
+    private func sendTokenAck(to peerID: MCPeerID) {
+        let ack = PeerMessage(type: .tokenAck, payload: ["ack": "true"])
+        send(message: ack, to: [peerID])
+        
+        // 检查是否双方都已完成交换
+        checkTokenExchangeCompletion(with: peerID)
+    }
+    
+    /// 处理收到的 Token 确认
+    private func handleTokenAck(from peerID: MCPeerID) {
+        print("[Peer] Received Token ACK from \(peerID.displayName)")
+        checkTokenExchangeCompletion(with: peerID)
+    }
+    
+    /// 检查 Token 交换是否完成
+    private func checkTokenExchangeCompletion(with peerID: MCPeerID) {
+        // 如果已经发送过 Token且收到了对方的 Token，则交换完成
+        if tokenExchangeState == .received {
+            tokenExchangeState = .completed
+            invalidateTokenExchangeTimer()
+            tokenExchangeDelegate?.peerManager(self, didCompleteTokenExchangeWith: peerID)
+        }
+    }
+    
+    /// 启动 Token 交换超时计时器
+    private func startTokenExchangeTimer() {
+        invalidateTokenExchangeTimer()
+        tokenExchangeTimeout = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: false) { [weak self] _ in
+            guard let self = self else { return }
+            print("[Peer] Token exchange timeout")
+            self.tokenExchangeState = .idle
+        }
+    }
+    
+    /// 停止 Token 交换计时器
+    private func invalidateTokenExchangeTimer() {
+        tokenExchangeTimeout?.invalidate()
+        tokenExchangeTimeout = nil
+    }
+    
+    /// 重置 Token 交换状态（当连接断开时调用）
+    private func resetTokenExchangeState(for peerID: String) {
+        receivedTokens.removeValue(forKey: peerID)
+        tokenExchangeState = .idle
+        invalidateTokenExchangeTimer()
+    }
 }
 
 // MARK: - MCSessionDelegate
@@ -196,6 +353,17 @@ extension PeerManager: MCSessionDelegate {
     func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
         if let message = try? JSONDecoder().decode(PeerMessage.self, from: data) {
             print("[Peer] Received \(message.type.rawValue) from \(peerID.displayName)")
+            
+            // 处理 Token 相关消息
+            switch message.type {
+            case .discoveryToken:
+                handleReceivedDiscoveryToken(message, from: peerID)
+            case .tokenAck:
+                handleTokenAck(from: peerID)
+            default:
+                // 其他消息类型可在代理中处理
+                break
+            }
         }
     }
     

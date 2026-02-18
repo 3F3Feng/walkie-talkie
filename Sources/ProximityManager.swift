@@ -60,7 +60,7 @@ class AudioController {
         try audioSession.setCategory(
             .playAndRecord,
             mode: .voiceChat,
-            options: [.allowBluetooth, .allowAirPlay, .defaultToSpeaker]
+            options: [.allowBluetoothA2DP, .allowAirPlay, .defaultToSpeaker]
         )
         try audioSession.setActive(true)
     }
@@ -132,8 +132,11 @@ class UWBProximityProvider: NSObject, ProximityProvider {
     @Published private(set) var direction: simd_float3?
     @Published var isAvailable: Bool = false
     
-    private var session: NISession?
+    private(set) var session: NISession?
     private weak var parentManager: ProximityManager?
+    
+    // 用于 Token 交换的本机 Token
+    private(set) var myDiscoveryToken: NIDiscoveryToken?
     
     override init() {
         super.init()
@@ -156,14 +159,63 @@ class UWBProximityProvider: NSObject, ProximityProvider {
             throw WalkieTalkieError.uwbUnavailable
         }
         
+        // 创建 NISession 并设置委托
         session = NISession()
         session?.delegate = self
+        
+        // 存储本机 Token 用于后续交换
+        // 注意：需要通过 NISession 的 discoveryToken 获取
+        if let token = session?.discoveryToken {
+            myDiscoveryToken = token
+            print("[UWB] Local discovery token available")
+        }
+        
         print("[UWB] Session started")
+    }
+    
+    /// 使用对端的 NIDiscoveryToken 配置会话（Token 交换的核心）
+    /// - Parameter peerToken: 从对端接收的 NIDiscoveryToken
+    func configureWithPeerToken(_ peerToken: NIDiscoveryToken) {
+        guard let session = session else {
+            print("[UWB] No active session to configure")
+            return
+        }
+        
+        // 检查是否有本机 Token
+        guard let myToken = myDiscoveryToken ?? session.discoveryToken else {
+            print("[UWB] No local discovery token available")
+            return
+        }
+        
+        // 创建 NINearbyPeerConfiguration
+        // 这是启动 NI 会话的关键配置
+        let peerConfig = NINearbyPeerConfiguration(peerToken: peerToken)
+        
+        // 使用配置更新会话
+        session.run(peerConfig)
+        
+        print("[UWB] Session configured with peer token")
+    }
+    
+    /// 仅使用本机 Token 启动会话（用于接收对端连接）
+    func startWithLocalToken() {
+        guard let session = session else {
+            print("[UWB] No active session")
+            return
+        }
+        
+        // 如果没有对端 Token，只运行本机配置
+        if let localToken = session.discoveryToken {
+            myDiscoveryToken = localToken
+            // 对于接收方，我们等待对端连接后配置
+            print("[UWB] Session ready, waiting for peer configuration")
+        }
     }
     
     func stop() {
         session?.invalidate()
         session = nil
+        myDiscoveryToken = nil
         distance = 0.0
         print("[UWB] Session stopped")
     }
