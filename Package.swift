@@ -9,16 +9,17 @@ let package = Package(
         .iOS(.v15)
     ],
     products: [
-        .library(
+        .executable(
             name: "WolkieTalkie",
-            targets: ["WolkieTalkie"]),
+            targets: ["WolkieTalkie"]
+        )
     ],
     dependencies: [],
     targets: [
-        .target(
+        .executableTarget(
             name: "WolkieTalkie",
             dependencies: [],
             path: "Sources"
-        ),
+        )
     ]
 )

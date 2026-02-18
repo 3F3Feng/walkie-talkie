@@ -29,5 +29,12 @@
     "swiftmodule": "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build/ProximityManager~partial.swiftmodule",
     "swift-dependencies": "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build/ProximityManager.swiftdeps",
     "diagnostics": "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build/ProximityManager.dia"
+  },
+  "/Users/shifengzhang/Documents/walkie-talkie/Sources/RadarView.swift": {
+    "dependencies": "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build/RadarView.d",
+    "object": "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build/RadarView.swift.o",
+    "swiftmodule": "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build/RadarView~partial.swiftmodule",
+    "swift-dependencies": "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build/RadarView.swiftdeps",
+    "diagnostics": "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build/RadarView.dia"
   }
 }

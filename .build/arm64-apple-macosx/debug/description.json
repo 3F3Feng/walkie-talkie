@@ -40,6 +40,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/Users/shifengzhang/Documents/walkie-talkie/Sources/RadarView.swift"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
         },
         {
@@ -47,14 +51,15 @@
           "name" : "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build/sources"
         }
       ],
-      "isLibrary" : true,
+      "isLibrary" : false,
       "moduleName" : "WolkieTalkie",
       "moduleOutputPath" : "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/Modules/WolkieTalkie.swiftmodule",
       "objects" : [
         "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build/AppDelegate.swift.o",
         "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build/ContentView.swift.o",
         "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build/PeerManager.swift.o",
-        "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build/ProximityManager.swift.o"
+        "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build/ProximityManager.swift.o",
+        "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build/RadarView.swift.o"
       ],
       "otherArguments" : [
         "-target",
@@ -73,10 +78,10 @@
         "-module-cache-path",
         "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/ModuleCache",
         "-parseable-output",
-        "-parse-as-library",
-        "-emit-objc-header",
-        "-emit-objc-header-path",
-        "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build/include/WolkieTalkie-Swift.h",
+        "-Xfrontend",
+        "-entry-point-function-name",
+        "-Xfrontend",
+        "WolkieTalkie_main",
         "-swift-version",
         "5",
         "-plugin-path",
@@ -92,6 +97,10 @@
         "-L",
         "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
         "-g",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.2.sdk",
+        "-target",
+        "arm64-apple-ios15.0-simulator",
         "-Xcc",
         "-isysroot",
         "-Xcc",
@@ -131,6 +140,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build/RadarView.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/Modules/WolkieTalkie.swiftmodule"
         }
       ],
@@ -139,7 +152,8 @@
         "/Users/shifengzhang/Documents/walkie-talkie/Sources/AppDelegate.swift",
         "/Users/shifengzhang/Documents/walkie-talkie/Sources/ContentView.swift",
         "/Users/shifengzhang/Documents/walkie-talkie/Sources/PeerManager.swift",
-        "/Users/shifengzhang/Documents/walkie-talkie/Sources/ProximityManager.swift"
+        "/Users/shifengzhang/Documents/walkie-talkie/Sources/ProximityManager.swift",
+        "/Users/shifengzhang/Documents/walkie-talkie/Sources/RadarView.swift"
       ],
       "tempsPath" : "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build",
       "wholeModuleOptimization" : false
@@ -160,6 +174,7 @@
       "/Users/shifengzhang/Documents/walkie-talkie/Sources/ContentView.swift",
       "/Users/shifengzhang/Documents/walkie-talkie/Sources/PeerManager.swift",
       "/Users/shifengzhang/Documents/walkie-talkie/Sources/ProximityManager.swift",
+      "/Users/shifengzhang/Documents/walkie-talkie/Sources/RadarView.swift",
       "-I",
       "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/Modules",
       "-target",
@@ -178,10 +193,10 @@
       "-module-cache-path",
       "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/ModuleCache",
       "-parseable-output",
-      "-parse-as-library",
-      "-emit-objc-header",
-      "-emit-objc-header-path",
-      "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build/include/WolkieTalkie-Swift.h",
+      "-Xfrontend",
+      "-entry-point-function-name",
+      "-Xfrontend",
+      "WolkieTalkie_main",
       "-swift-version",
       "5",
       "-plugin-path",
@@ -197,6 +212,10 @@
       "-L",
       "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
       "-g",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.2.sdk",
+      "-target",
+      "arm64-apple-ios15.0-simulator",
       "-Xcc",
       "-isysroot",
       "-Xcc",
@@ -236,6 +255,20 @@
     }
   },
   "writeCommands" : {
+    "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie-entitlement.plist" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<entitlement-plist>"
+        },
+        {
+          "kind" : "virtual",
+          "name" : "<com.apple.security.get-task-allow>"
+        }
+      ],
+      "outputFilePath" : "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie-entitlement.plist"
+    },
     "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build/sources" : {
       "alwaysOutOfDate" : false,
       "inputs" : [
@@ -258,9 +291,43 @@
         {
           "kind" : "file",
           "name" : "/Users/shifengzhang/Documents/walkie-talkie/Sources/ProximityManager.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/shifengzhang/Documents/walkie-talkie/Sources/RadarView.swift"
         }
       ],
       "outputFilePath" : "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build/sources"
+    },
+    "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.product/Objects.LinkFileList" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<link-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build/AppDelegate.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build/ContentView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build/PeerManager.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build/ProximityManager.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.build/RadarView.swift.o"
+        }
+      ],
+      "outputFilePath" : "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/WolkieTalkie.product/Objects.LinkFileList"
     },
     "/Users/shifengzhang/Documents/walkie-talkie/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt" : {
       "alwaysOutOfDate" : true,
