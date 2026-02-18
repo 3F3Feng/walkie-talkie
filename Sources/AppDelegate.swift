@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import UIKit
+import NearbyInteraction
 
 class AppDelegate: NSObject, UIApplicationDelegate {
     
@@ -52,7 +53,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                 .playAndRecord,
                 mode: .voiceChat,
                 options: [
-                    .allowBluetooth,      // 允许蓝牙耳机
+                    .allowBluetoothHFP,   // 允许蓝牙耳机（Hands-Free Profile）
+                    .allowBluetoothA2DP,  // 允许蓝牙高音质音频
                     .allowAirPlay,        // 允许 AirPlay
                     .defaultToSpeaker,    // 默认扬声器输出
                     .mixWithOthers        // 允许与其他应用混音

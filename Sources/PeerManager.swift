@@ -5,6 +5,14 @@ import UIKit
 import Combine
 import AVFoundation
 
+// MARK: - Token Exchange Delegate
+protocol TokenExchangeDelegate: AnyObject {
+    /// 当从对端收到 NIDiscoveryToken 时调用
+    func peerManager(_ peerManager: PeerManager, didReceiveDiscoveryToken token: NIDiscoveryToken, fromPeer peerID: MCPeerID)
+    /// Token 交换完成
+    func peerManager(_ peerManager: PeerManager, didCompleteTokenExchangeWith peerID: MCPeerID)
+}
+
 // MARK: - 设备对等体模型
 struct PeerDevice: Identifiable {
     let peerID: MCPeerID
@@ -72,13 +80,6 @@ enum TokenExchangeState: String {
     case waiting = "等待对端Token"
     case received = "已接收对端Token"
     case completed = "Token交换完成"
-}
-
-protocol TokenExchangeDelegate: AnyObject {
-    /// 当从对端收到 NIDiscoveryToken 时调用
-    func peerManager(_ peerManager: PeerManager, didReceiveDiscoveryToken token: NIDiscoveryToken, fromPeer peerID: MCPeerID)
-    /// Token 交换完成
-    func peerManager(_ peerManager: PeerManager, didCompleteTokenExchangeWith peerID: MCPeerID)
 }
 
 // MARK: - AudioStreamManager

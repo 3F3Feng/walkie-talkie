@@ -111,7 +111,7 @@ struct ContentView: View {
     private var distanceCard: some View {
         VStack(spacing: 16) {
             // 距离数值
-            HStack(alignment: .lastBaseline, spacing: 4) {
+            HStack(alignment: .center, spacing: 4) {
                 Text(String(format: "%.2f", proximityManager.currentDistance))
                     .font(.system(size: 72, weight: .bold, design: .rounded))
                     .foregroundColor(.white)

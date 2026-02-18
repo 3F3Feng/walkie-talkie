@@ -4,6 +4,7 @@ import CoreBluetooth
 import Combine
 import AVFoundation
 import simd
+import MultipeerConnectivity
 
 // MARK: - 协议定义
 protocol ProximityProvider {
