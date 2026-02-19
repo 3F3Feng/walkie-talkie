@@ -15,6 +15,7 @@ protocol ProximityProvider {
     func stop()
 }
 
+
 // MARK: - Token Exchange 状态
 enum TokenExchangeState: String {
     case idle = "空闲"
@@ -22,6 +23,7 @@ enum TokenExchangeState: String {
     case received = "已接收对端Token"
     case completed = "Token交换完成"
 }
+
 
 // MARK: - Peer 消息类型
 enum PeerMessageType: String, Codable {
@@ -35,7 +37,9 @@ enum PeerMessageType: String, Codable {
     case pairingRequest = "pairingRequest"
     case pairingAccept = "pairingAccept"
     case pairingReject = "pairingReject"
+    case deviceInfo = "deviceInfo"  // 交换设备信息
 }
+
 
 struct PeerMessage: Codable {
     let type: PeerMessageType
@@ -49,12 +53,23 @@ struct PeerMessage: Codable {
     }
 }
 
+
 // MARK: - 音频流消息
+
+// MARK: - 设备信息消息
+struct DeviceInfoMessage: Codable {
+    let deviceName: String
+    let isWalkieTalkie: Bool
+    let isInPairingMode: Bool
+    let timestamp: TimeInterval
+}
+
 struct AudioStreamMessage: Codable {
     let sequenceNumber: UInt32
     let timestamp: TimeInterval
     let audioData: Data
 }
+
 
 // MARK: - 距离等级枚举
 enum DistanceLevel: String, CaseIterable {
@@ -77,11 +92,13 @@ enum DistanceLevel: String, CaseIterable {
     }
 }
 
+
 // MARK: - Provider 类型（用于区分测距方式）
 enum ProviderType: String {
     case uwb = "UWB"
     case bluetooth = "蓝牙"
 }
+
 
 // MARK: - 设备连接状态
 enum DeviceConnectionState: String {
@@ -92,11 +109,12 @@ enum DeviceConnectionState: String {
     var displayText: String { rawValue }
 }
 
+
 // MARK: - 追踪的设备模型
 class TrackedDevice: Identifiable, ObservableObject {
     let id: String
     let peerID: MCPeerID
-    let displayName: String
+    var displayName: String
     
     @Published var connectionState: DeviceConnectionState = .connecting
     @Published var distance: Double = 0.0
@@ -107,6 +125,7 @@ class TrackedDevice: Identifiable, ObservableObject {
     @Published var lastSeen: Date = Date()
     @Published var isSelected: Bool = false
     @Published var pairingState: PairingState = .none
+    var isWalkieTalkie: Bool = false  // 是否为 WalkieTalkie 设备
     
     // UWB Token（用于 UWB 测距）
     var niToken: NIDiscoveryToken?
@@ -127,6 +146,7 @@ class TrackedDevice: Identifiable, ObservableObject {
     }
 }
 
+
 // MARK: - 应用状态
 enum WalkieState: String {
     case idle = "空闲"
@@ -135,6 +155,7 @@ enum WalkieState: String {
     case transmitting = "对讲中"
     case error = "错误"
 }
+
 
 // MARK: - 错误定义
 enum WalkieTalkieError: Error, LocalizedError {
@@ -156,6 +177,7 @@ enum WalkieTalkieError: Error, LocalizedError {
         }
     }
 }
+
 
 // MARK: - 音频控制器
 class AudioController {
@@ -198,6 +220,7 @@ class AudioController {
     }
 }
 
+
 // MARK: - 距离平滑滤波器
 class DistanceSmoother {
     private var samples: [Double] = []
@@ -229,6 +252,7 @@ class DistanceSmoother {
         samples.removeAll()
     }
 }
+
 
 // MARK: - UWB 提供者（方案A）
 class UWBProximityProvider: NSObject, ProximityProvider {
@@ -327,6 +351,7 @@ class UWBProximityProvider: NSObject, ProximityProvider {
     }
 }
 
+
 extension UWBProximityProvider: NISessionDelegate {
     func session(_ session: NISession, didUpdate nearbyObjects: [NINearbyObject]) {
         guard let object = nearbyObjects.first else { return }
@@ -352,6 +377,7 @@ extension UWBProximityProvider: NISessionDelegate {
         isAvailable = false
     }
 }
+
 
 // MARK: - 蓝牙 Provider（降级方案）
 class BluetoothProximityProvider: NSObject, ProximityProvider {
@@ -420,6 +446,7 @@ class BluetoothProximityProvider: NSObject, ProximityProvider {
         print("[Bluetooth] Stopped")
     }
 }
+
 
 // MARK: - 主控制器
 class ProximityManager: NSObject, ObservableObject {
@@ -1102,7 +1129,45 @@ class ProximityManager: NSObject, ObservableObject {
             device.pairingState = .none
         }
     }
-}
+
+    /// 处理设备信息消息
+    private func handleDeviceInfo(_ message: PeerMessage, from peerID: MCPeerID) {
+        guard let payload = message.payload,
+              let data = try? JSONSerialization.data(withJSONObject: payload),
+              let info = try? JSONDecoder().decode(DeviceInfoMessage.self, from: data) else { return }
+        
+        print("[Manager] 📱 收到设备信息: \(info.deviceName), WalkieTalkie: \(info.isWalkieTalkie), 配对模式: \(info.isInPairingMode)")
+        
+        // 更新设备信息
+        if let device = activeDevices.first(where: { $0.id == peerID.displayName }) {
+            device.displayName = info.deviceName
+            device.isWalkieTalkie = info.isWalkieTalkie
+            device.connectionState = .connected
+        }
+        if let device = discoverableDevices.first(where: { $0.id == peerID.displayName }) {
+            device.displayName = info.deviceName
+            device.isWalkieTalkie = info.isWalkieTalkie
+            device.connectionState = .connected
+        }
+    }
+
+    /// 发送设备信息给已连接设备
+    func sendDeviceInfo(to peerID: MCPeerID) {
+        let info = DeviceInfoMessage(
+            deviceName: myPeerID.displayName,
+            isWalkieTalkie: true,
+            isInPairingMode: isPairingMode,
+            timestamp: Date().timeIntervalSince1970
+        )
+        
+        if let data = try? JSONEncoder().encode(info),
+           let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            let message = PeerMessage(type: .deviceInfo, payload: payload.mapValues { "\($0)" })
+            send(message: message, to: [peerID])
+            print("[Manager] 📤 已发送设备信息给: \(peerID.displayName)")
+        }
+    }}
+
 
 // MARK: - MCSessionDelegate
 extension ProximityManager: MCSessionDelegate {
@@ -1116,6 +1181,8 @@ extension ProximityManager: MCSessionDelegate {
                 
             case .connected:
                 print("[Session] ✅ 已连接: \(peerID.displayName)")
+                // 连接成功后发送设备信息
+                self.sendDeviceInfo(to: peerID)
                 
                 let tracked = TrackedDevice(peerID: peerID)
                 tracked.connectionState = .connected
@@ -1166,6 +1233,8 @@ extension ProximityManager: MCSessionDelegate {
                 handlePairingAccept(message, from: peerID)
             case .pairingReject:
                 handlePairingReject(message, from: peerID)
+            case .deviceInfo:
+                handleDeviceInfo(message, from: peerID)
             default:
                 break
             }
@@ -1177,12 +1246,14 @@ extension ProximityManager: MCSessionDelegate {
     func session(_ session: MCSession, didFinishReceivingResourceWithName: String, fromPeer: MCPeerID, at: URL?, withError: Error?) {}
 }
 
+
 // MARK: - MCNearbyServiceAdvertiserDelegate
 extension ProximityManager: MCNearbyServiceAdvertiserDelegate {
     func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
         invitationHandler(true, session)
     }
 }
+
 
 // MARK: - MCNearbyServiceBrowserDelegate
 extension ProximityManager: MCNearbyServiceBrowserDelegate {
@@ -1212,6 +1283,7 @@ extension ProximityManager: MCNearbyServiceBrowserDelegate {
     }
 }
 
+
 // MARK: - 配对状态
 enum PairingState: String {
     case none = "未配对"
@@ -1219,17 +1291,20 @@ enum PairingState: String {
     case paired = "已配对"
 }
 
+
 // MARK: - 应用模式（配对 vs 对话）
 enum AppMode: String {
     case pairing = "配对模式"
     case talk = "对话模式"
 }
 
+
 // MARK: - 对话模式（自动 vs PTT）
 enum TalkMode: String {
     case auto = "自动"
     case ptt = "按键说话"
 }
+
 
 // MARK: - CoreBluetooth 真实 BLE 扫描
 class BLEDiscoveryProvider: NSObject, CBCentralManagerDelegate {
@@ -1297,6 +1372,7 @@ class BLEDiscoveryProvider: NSObject, CBCentralManagerDelegate {
     }
 }
 
+
 // MARK: - TrackedDevice BLE 初始化
 extension TrackedDevice {
     convenience init(bleName: String, bleId: String) {
@@ -1304,3 +1380,4 @@ extension TrackedDevice {
         self.init(peerID: fakePeerID)
     }
 }
+
