@@ -17,6 +17,11 @@ struct ContentView: View {
                 
                 Spacer()
                 
+                // 模式选择器
+                modeSelector
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                
                 // 核心内容区 - 设备列表
                 deviceListContent
                 
@@ -26,6 +31,55 @@ struct ContentView: View {
                 controlPanel
             }
             .padding()
+        }
+        .sheet(isPresented: Binding<Bool>(
+            get: { proximityManager.pendingPairingRequest != nil },
+            set: { if !$0 { proximityManager.pendingPairingRequest = nil } }
+        )) {
+            if let device = proximityManager.pendingPairingRequest {
+                VStack(spacing: 20) {
+                    Image(systemName: "link.badge.plus")
+                        .font(.system(size: 60))
+                        .foregroundColor(.blue)
+                    
+                    Text("配对请求")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    
+                    Text("「\(device.displayName)」请求与您配对")
+                        .font(.body)
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                    
+                    HStack(spacing: 20) {
+                        Button(action: {
+                            proximityManager.acceptPairing(with: device)
+                        }) {
+                            Text("接受")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.green)
+                                .cornerRadius(12)
+                        }
+                        
+                        Button(action: {
+                            proximityManager.rejectPairing(with: device)
+                        }) {
+                            Text("拒绝")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.red)
+                                .cornerRadius(12)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+                .padding()
+            }
         }
     }
     
@@ -99,6 +153,57 @@ struct ContentView: View {
             .cornerRadius(20)
         }
         .foregroundColor(.white)
+    }
+    
+    // MARK: - 模式选择器
+    private var modeSelector: some View {
+        VStack(spacing: 12) {
+            // 配对模式开关
+            HStack {
+                Image(systemName: "link.badge.plus")
+                    .foregroundColor(proximityManager.isPairingMode ? .blue : .gray)
+                Text("配对模式")
+                    .font(.subheadline)
+                    .foregroundColor(.white)
+                Spacer()
+                Toggle("", isOn: Binding(
+                    get: { proximityManager.isPairingMode },
+                    set: { _ in proximityManager.togglePairingMode() }
+                ))
+                .labelsHidden()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(Color.white.opacity(0.1))
+            .cornerRadius(12)
+            
+            // 对话模式切换（始终显示）
+            HStack {
+                HStack {
+                    Image(systemName: "mic.fill")
+                        .foregroundColor(.green)
+                    Text("对话模式")
+                        .font(.subheadline)
+                        .foregroundColor(.white)
+                    Spacer()
+                    Picker("模式", selection: $proximityManager.talkMode) {
+                        Text("自动").tag(TalkMode.auto)
+                        Text("按键说话").tag(TalkMode.ptt)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 150)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Color.white.opacity(0.1))
+                .cornerRadius(12)
+            }
+            
+            // 模式提示
+            Text(proximityManager.isPairingMode ? "正在搜索附近设备..." : "与已配对设备对话中")
+                .font(.caption)
+                .foregroundColor(.gray)
+        }
     }
     
     private var statusColor: Color {
