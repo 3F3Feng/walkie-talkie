@@ -990,15 +990,13 @@ class ProximityManager: NSObject, ObservableObject {
         
         if isPairingMode {
             appMode = .pairing
-            // 双模搜索：UWB + BLE
-            startMultipeerSession()
-            BLEDiscoveryProvider.shared.configure(with: self)
-            BLEDiscoveryProvider.shared.start()
+            // 纯蓝牙搜索（户外可用，不依赖 WiFi）
+            BLEManager.shared.configure(with: self)
+            BLEManager.shared.startPairingMode()
             transition(to: .discovering)
         } else {
             appMode = .talk
-            stopMultipeerSession()
-            BLEDiscoveryProvider.shared.stop()
+            BLEManager.shared.stopPairingMode()
             transition(to: .idle)
         }
     }
@@ -1381,3 +1379,198 @@ extension TrackedDevice {
     }
 }
 
+// MARK: - 纯蓝牙管理器（户外无需 WiFi）
+import CoreBluetooth
+import Combine
+import UIKit
+
+class BLEManager: NSObject, CBCentralManagerDelegate, CBPeripheralManagerDelegate {
+    static let shared = BLEManager()
+    
+    // MARK: - 服务UUID (标准格式)
+    private let serviceUUID = CBUUID(string: "00002760-0000-1000-8000-00805F9B34FB")  // BLE 标准 UUID
+    private let deviceInfoCharUUID = CBUUID(string: "00002761-0000-1000-8000-00805F9B34FB")
+    
+    // MARK: - 属性
+    private var centralManager: CBCentralManager?
+    private var peripheralManager: CBPeripheralManager?
+    private weak var proximityManager: ProximityManager?
+    
+    @Published var isScanning = false
+    @Published var isAdvertising = false
+    
+    // 发现的设备
+    var discoveredPeripherals: [CBPeripheral: PeripheralInfo] = [:]
+    
+    // MARK: - 初始化
+    private override init() {
+        super.init()
+    }
+    
+    func configure(with manager: ProximityManager) {
+        self.proximityManager = manager
+        centralManager = CBCentralManager(delegate: self, queue: nil)
+        peripheralManager = CBPeripheralManager(delegate: self, queue: nil)
+    }
+    
+    // MARK: - 开始配对模式
+    func startPairingMode() {
+        print("[BLE] 开始配对模式")
+        print("[BLE] 中心管理器状态: \(centralManager?.state.rawValue ?? -1)")
+        print("[BLE] 外围管理器状态: \(peripheralManager?.state.rawValue ?? -1)")
+        
+        // 等待蓝牙就绪后再开始
+        checkAndStart()
+    }
+    
+    private func checkAndStart() {
+        let centralReady = centralManager?.state == .poweredOn
+        let peripheralReady = peripheralManager?.state == .poweredOn
+        
+        if centralReady && peripheralReady {
+            print("[BLE] ✅ 双管理器就绪，开始扫描和广播")
+            startScanning()
+            startAdvertising()
+        } else {
+            print("[BLE] ⏳ 等待蓝牙就绪...")
+            print("[BLE] 中心: \(centralManager?.state.rawValue ?? -1), 外围: \(peripheralManager?.state.rawValue ?? -1)")
+            // 延迟重试
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                self?.checkAndStart()
+            }
+        }
+    }
+    
+    // MARK: - 停止配对模式
+    func stopPairingMode() {
+        print("[BLE] 停止配对模式")
+        stopScanning()
+        stopAdvertising()
+    }
+    
+    // MARK: - 中心设备：扫描
+    func startScanning() {
+        guard let central = centralManager, central.state == .poweredOn else {
+            print("[BLE] ⚠️ 蓝牙未就绪")
+            return
+        }
+        
+        isScanning = true
+        central.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
+        print("[BLE] 🔍 开始扫描")
+    }
+    
+    func stopScanning() {
+        centralManager?.stopScan()
+        isScanning = false
+    }
+    
+    // MARK: - 外围设备：广播
+    func startAdvertising() {
+        guard let peripheral = peripheralManager, peripheral.state == .poweredOn else {
+            print("[BLE] ⚠️ 外围未就绪")
+            return
+        }
+        
+        isAdvertising = true
+        let deviceName = "Walkie_\(UIDevice.current.name.prefix(8))"
+        let advertisementData: [String: Any] = [
+            CBAdvertisementDataLocalNameKey: deviceName,
+            CBAdvertisementDataServiceUUIDsKey: [serviceUUID]
+        ]
+        
+        peripheral.startAdvertising(advertisementData)
+        print("[BLE] 📢 开始广播: \(deviceName)")
+    }
+    
+    func stopAdvertising() {
+        peripheralManager?.stopAdvertising()
+        isAdvertising = false
+    }
+    
+    // MARK: - CBCentralManagerDelegate
+    func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        print("[BLE] 中心状态: \(central.state.rawValue)")
+        if central.state == .poweredOn && isScanning {
+            startScanning()
+        }
+    }
+    
+    func centralManager(_ central: CBCentralManager, 
+                        didDiscover peripheral: CBPeripheral,
+                        advertisementData: [String : Any], 
+                        rssi RSSI: NSNumber) {
+        
+        guard RSSI.intValue > -95 else { return }  // 放宽过滤
+        
+        let deviceName = advertisementData[CBAdvertisementDataLocalNameKey] as? String
+        let displayName = deviceName ?? "BLE_\(peripheral.identifier.uuidString.prefix(6))"
+        
+        // 简单判断：名字包含 Walkie 或者是我们的广播
+        let isWalkie = deviceName?.contains("Walkie") ?? false
+        
+        print("[BLE] 📱 \(displayName) RSSI:\(RSSI) dBm Walkie:\(isWalkie)")
+        
+        // 更新 ProximityManager - 不过滤服务 UUID
+        updateProximityDevice(peripheral, rssi: RSSI.intValue, name: displayName, isWalkie: isWalkie)
+    }
+    
+    private func updateProximityDevice(_ peripheral: CBPeripheral, rssi: Int, name: String, isWalkie: Bool) {
+        guard let pm = proximityManager else { return }
+        
+        let distance = rssiToDistance(rssi)
+        let deviceId = peripheral.identifier.uuidString
+        
+        if let existing = pm.discoverableDevices.first(where: { $0.id == deviceId }) {
+            existing.distance = distance
+            existing.rssi = rssi
+            existing.lastSeen = Date()
+        } else {
+            let device = TrackedDevice(bleName: name, bleId: deviceId)
+            device.distance = distance
+            device.rssi = rssi
+            device.providerType = .bluetooth
+            device.isWalkieTalkie = isWalkie
+            pm.addDiscoveredDevice(device)
+            print("[BLE] ➕ 添加: \(name) (Walkie:\(isWalkie))")
+        }
+    }
+    
+    // MARK: - CBPeripheralManagerDelegate
+    func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
+        print("[BLE] 外围状态: \(peripheral.state.rawValue)")
+        if peripheral.state == .poweredOn {
+            setupService()
+        }
+    }
+    
+    private func setupService() {
+        let char = CBMutableCharacteristic(
+            type: deviceInfoCharUUID,
+            properties: [.read, .write],
+            value: nil,
+            permissions: [.readable, .writeable]
+        )
+        
+        let service = CBMutableService(type: serviceUUID, primary: true)
+        service.characteristics = [char]
+        
+        peripheralManager?.add(service)
+        print("[BLE] ✅ 服务已添加")
+    }
+    
+    private func rssiToDistance(_ rssi: Int) -> Double {
+        let power = -50
+        if rssi >= 0 { return 0 }
+        return min(pow(10, Double(power - rssi) / 20.0), 50.0)
+    }
+}
+
+// MARK: - 设备信息
+struct PeripheralInfo {
+    let peripheral: CBPeripheral
+    let name: String
+    let rssi: Int
+    let hasWalkieTalkie: Bool
+    var lastSeen: Date = Date()
+}
