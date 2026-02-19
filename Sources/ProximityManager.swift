@@ -32,6 +32,9 @@ enum PeerMessageType: String, Codable {
     case discoveryToken = "discoveryToken"
     case tokenAck = "tokenAck"
     case audioStream = "audioStream"
+    case pairingRequest = "pairingRequest"
+    case pairingAccept = "pairingAccept"
+    case pairingReject = "pairingReject"
 }
 
 struct PeerMessage: Codable {
@@ -102,6 +105,8 @@ class TrackedDevice: Identifiable, ObservableObject {
     @Published var providerType: ProviderType = .bluetooth
     @Published var rssi: Int = -50
     @Published var lastSeen: Date = Date()
+    @Published var isSelected: Bool = false
+    @Published var pairingState: PairingState = .none
     
     // UWB Token（用于 UWB 测距）
     var niToken: NIDiscoveryToken?
@@ -110,6 +115,15 @@ class TrackedDevice: Identifiable, ObservableObject {
         self.id = peerID.displayName
         self.peerID = peerID
         self.displayName = peerID.displayName
+    }
+    
+    // 从已配对设备恢复的初始化器
+    init(displayName: String) {
+        self.id = displayName
+        self.peerID = MCPeerID(displayName: displayName)
+        self.displayName = displayName
+        self.connectionState = .connected
+        self.pairingState = .paired
     }
 }
 
@@ -421,6 +435,11 @@ class ProximityManager: NSObject, ObservableObject {
     @Published var providerType: ProviderType = .bluetooth
     @Published var uwbAvailable: Bool = false
     @Published var errorMessage: String?
+    @Published var isPairingMode: Bool = false
+    @Published var appMode: AppMode = .talk
+    @Published var talkMode: TalkMode = .auto
+    @Published private(set) var pairedDevices: [TrackedDevice] = []
+    @Published var pendingPairingRequest: TrackedDevice? = nil
     
     // MARK: - 多设备支持
     @Published private(set) var activeDevices: [TrackedDevice] = []
@@ -820,9 +839,21 @@ class ProximityManager: NSObject, ObservableObject {
         }
         distanceSmoothers.removeAll()
         
-        // 清空设备列表
-        activeDevices.removeAll()
+        // 清空设备列表 - 保留已配对设备
         discoverableDevices.removeAll()
+        
+        // 保留已配对设备的连接
+        let pairedIds = Set(pairedDevices.map { $0.id })
+        activeDevices.removeAll { !pairedIds.contains($0.id) }
+        
+        // 重置已配对设备状态
+        for device in pairedDevices {
+            device.distance = 0.0
+            device.distanceLevel = .unknown
+            device.volume = 0.5
+            device.connectionState = .disconnected
+            device.providerType = .bluetooth
+        }
         
         currentDistance = 0.0
         currentVolume = 0.5
@@ -916,6 +947,153 @@ class ProximityManager: NSObject, ObservableObject {
         print("[State] \(state.rawValue) → \(newState.rawValue)")
         state = newState
     }
+    
+    // MARK: - 配对功能
+    
+    /// 切换配对模式（异步版 - 避免 UI 卡顿）
+    func togglePairingMode() {
+        isPairingMode.toggle()
+        print("[Manager] Pairing mode: \(isPairingMode ? "ON" : "OFF")")
+        
+        if isPairingMode {
+            appMode = .pairing
+            if state == .idle || state == .error {
+                DispatchQueue.global(qos: .background).async { [weak self] in
+                    self?.startWalkieTalkie()
+                }
+            }
+        } else {
+            appMode = .talk
+            cleanupUnpairedDevices()
+        }
+    }
+    
+    private func cleanupUnpairedDevices() {
+        let pairedIds = Set(pairedDevices.map { $0.id })
+        
+        // 保留已配对设备
+        activeDevices.removeAll { device in
+            !pairedIds.contains(device.id)
+        }
+        
+        // 保留已配对或已连接的可发现设备
+        discoverableDevices.removeAll { device in
+            !pairedIds.contains(device.id) && device.connectionState != .connected
+        }
+        
+        print("[Manager] Cleaned up - Active: \(activeDevices.count), Paired: \(pairedDevices.count)")
+    }
+    
+    /// 请求配对
+    func requestPairing(with device: TrackedDevice) {
+        device.pairingState = .pending
+        print("[Manager] Requesting pairing with: \(device.displayName)")
+        
+        let message = PeerMessage(type: .pairingRequest, payload: ["deviceName": myPeerID.displayName])
+        send(message: message, to: [device.peerID])
+        
+        // 30秒超时
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in
+            if device.pairingState == .pending {
+                device.pairingState = .none
+            }
+        }
+    }
+    
+    /// 接受配对
+    func acceptPairing(with device: TrackedDevice) {
+        device.pairingState = .paired
+        device.connectionState = .connected
+        savePairedDevice(device)
+        
+        let message = PeerMessage(type: .pairingAccept, payload: ["deviceName": myPeerID.displayName])
+        send(message: message, to: [device.peerID])
+        
+        pendingPairingRequest = nil
+        print("[Manager] ✅ Paired with: \(device.displayName)")
+    }
+    
+    /// 拒绝配对
+    func rejectPairing(with device: TrackedDevice) {
+        device.pairingState = .none
+        
+        let message = PeerMessage(type: .pairingReject, payload: ["deviceName": myPeerID.displayName])
+        send(message: message, to: [device.peerID])
+        
+        pendingPairingRequest = nil
+    }
+    
+    /// 切换设备选中状态
+    func toggleDeviceSelection(_ device: TrackedDevice) {
+        for d in pairedDevices { d.isSelected = false }
+        for d in activeDevices { d.isSelected = false }
+        for d in discoverableDevices { d.isSelected = false }
+        device.isSelected.toggle()
+    }
+    
+    /// 保存已配对设备
+    private func savePairedDevice(_ device: TrackedDevice) {
+        var names = UserDefaults.standard.stringArray(forKey: "pairedDeviceNames") ?? []
+        if !names.contains(device.displayName) {
+            names.append(device.displayName)
+            UserDefaults.standard.set(names, forKey: "pairedDeviceNames")
+        }
+        if !pairedDevices.contains(where: { $0.id == device.id }) {
+            pairedDevices.append(device)
+        }
+    }
+    
+    /// 加载已配对设备
+    func loadPairedDevices() {
+        let names = UserDefaults.standard.stringArray(forKey: "pairedDeviceNames") ?? []
+        pairedDevices = names.map { TrackedDevice(displayName: $0) }
+        print("[Manager] Loaded \(pairedDevices.count) paired devices")
+    }
+    
+    /// 处理配对请求消息
+    private func handlePairingRequest(_ message: PeerMessage, from peerID: MCPeerID) {
+        guard let deviceName = message.payload?["deviceName"] else { return }
+        print("[Manager] Pairing request from: \(deviceName)")
+        
+        let device: TrackedDevice
+        if let existing = activeDevices.first(where: { $0.id == peerID.displayName }) {
+            device = existing
+        } else {
+            device = TrackedDevice(peerID: peerID)
+            activeDevices.append(device)
+        }
+        device.pairingState = .pending
+        
+        DispatchQueue.main.async { [weak self] in
+            self?.pendingPairingRequest = device
+        }
+    }
+    
+    /// 处理配对接受消息
+    private func handlePairingAccept(_ message: PeerMessage, from peerID: MCPeerID) {
+        guard let deviceName = message.payload?["deviceName"] else { return }
+        print("[Manager] ✅ Pairing accepted by: \(deviceName)")
+        
+        if let device = activeDevices.first(where: { $0.id == peerID.displayName }) {
+            device.pairingState = .paired
+            device.connectionState = .connected
+            savePairedDevice(device)
+        }
+        
+        DispatchQueue.main.async { [weak self] in
+            self?.pendingPairingRequest = nil
+        }
+    }
+    
+    /// 处理配对拒绝消息
+    private func handlePairingReject(_ message: PeerMessage, from peerID: MCPeerID) {
+        guard let deviceName = message.payload?["deviceName"] else { return }
+        print("[Manager] Pairing rejected by: \(deviceName)")
+        
+        if let device = activeDevices.first(where: { $0.id == peerID.displayName }) {
+            device.pairingState = .none
+        }
+    }
 }
 
 // MARK: - MCSessionDelegate
@@ -974,6 +1152,12 @@ extension ProximityManager: MCSessionDelegate {
                 }
             case .audioStream:
                 handleReceivedAudio(data)
+            case .pairingRequest:
+                handlePairingRequest(message, from: peerID)
+            case .pairingAccept:
+                handlePairingAccept(message, from: peerID)
+            case .pairingReject:
+                handlePairingReject(message, from: peerID)
             default:
                 break
             }
@@ -1018,4 +1202,23 @@ extension ProximityManager: MCNearbyServiceBrowserDelegate {
         discoveredPeers.removeAll { $0.displayName == peerID.displayName }
         discoverableDevices.removeAll { $0.id == peerID.displayName }
     }
+}
+
+// MARK: - 配对状态
+enum PairingState: String {
+    case none = "未配对"
+    case pending = "等待确认"
+    case paired = "已配对"
+}
+
+// MARK: - 应用模式（配对 vs 对话）
+enum AppMode: String {
+    case pairing = "配对模式"
+    case talk = "对话模式"
+}
+
+// MARK: - 对话模式（自动 vs PTT）
+enum TalkMode: String {
+    case auto = "自动"
+    case ptt = "按键说话"
 }
