@@ -1,11 +1,45 @@
 import SwiftUI
 import NearbyInteraction
 import simd
+import Core
+
+// MARK: - Proximity Manager (简化版)
+
+// UWB 方向 provider
+final class UWBProximityProvider: ObservableObject {
+    static let shared = UWBProximityProvider()
+    
+    @Published var direction: simd_float3?
+    @Published var isSupported: Bool = false
+    
+    private init() {
+        isSupported = NISession.isSupported
+    }
+}
+
+/// Proximity 管理器
+final class ProximityManager: ObservableObject {
+    static let shared = ProximityManager()
+    
+    @Published var currentDistance: Double = 0.0
+    @Published var isRunning: Bool = false
+    
+    private init() {}
+    
+    func startWalkieTalkie() {
+        isRunning = true
+    }
+    
+    func stopWalkieTalkie() {
+        isRunning = false
+    }
+}
 
 // MARK: - 雷达视图
 /// 使用 UWB 方向数据 (azimuth/elevation) 可视化显示对端位置
 struct RadarView: View {
-    @ObservedObject var proximityManager: ProximityManager
+    @StateObject private var proximityManager = ProximityManager.shared
+    @StateObject private var uwbProvider = UWBProximityProvider.shared
     
     // 雷达配置
     var radarSize: CGFloat = 280
@@ -42,7 +76,7 @@ struct RadarView: View {
                 // 对端位置指示器
                 PeerIndicator(
                     distance: proximityManager.currentDistance,
-                    direction: UWBProximityProvider.shared.direction,
+                    direction: uwbProvider.direction,
                     maxRange: maxRange,
                     center: center,
                     containerSize: size
@@ -67,16 +101,16 @@ struct RadarView: View {
                         .font(.system(size: 24, weight: .bold, design: .monospaced))
                         .foregroundColor(.green)
                     
-                    if let direction = UWBProximityProvider.shared.direction {
+                    if let direction = uwbProvider.direction {
                         let azimuth = calculateAzimuth(direction)
                         let elevation = calculateElevation(direction)
                         Text("Az: \(String(format: "%.0f°", azimuth))  El: \(String(format: "%.0f°", elevation))")
                             .font(.system(size: 12, design: .monospaced))
                             .foregroundColor(.green.opacity(0.8))
                     } else {
-                        Text("方向校准中...")
+                        Text("UWB: \(uwbProvider.isSupported ? "方向校准中..." : "不支持")")
                             .font(.system(size: 12))
-                            .foregroundColor(.orange)
+                            .foregroundColor(uwbProvider.isSupported ? .orange : .red)
                     }
                 }
                 .padding(.bottom, 20)
@@ -231,7 +265,6 @@ struct DirectionLabels: View {
 
 // MARK: - 预览
 #Preview {
-    RadarView(proximityManager: ProximityManager.shared)
+    RadarView()
         .frame(width: 300, height: 300)
-        .preferredColorScheme(.dark)
 }

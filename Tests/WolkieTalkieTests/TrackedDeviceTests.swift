@@ -1,10 +1,15 @@
 // MARK: - TrackedDevice 单元测试
 import XCTest
-@testable import WolkieTalkie
+import Core
+
+#if canImport(MultipeerConnectivity)
+import MultipeerConnectivity
+#endif
 
 final class TrackedDeviceTests: XCTestCase {
 
     // MARK: - 初始化测试
+    #if canImport(MultipeerConnectivity)
     func testInit_WithPeerID() {
         let peerID = MCPeerID(displayName: "TestDevice")
         let device = TrackedDevice(peerID: peerID)
@@ -12,6 +17,7 @@ final class TrackedDeviceTests: XCTestCase {
         XCTAssertEqual(device.displayName, "TestDevice")
         XCTAssertEqual(device.id, "TestDevice")
     }
+    #endif
     
     func testInit_WithBLE() {
         let device = TrackedDevice(bleName: "BLEDevice", bleId: "ble-123")

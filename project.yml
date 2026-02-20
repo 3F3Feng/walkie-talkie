@@ -2,9 +2,13 @@ name: WolkieTalkie
 options:
   bundleIdPrefix: com.wolkie
   deploymentTarget:
-    iOS: "15.0"
+    iOS: "16.0"
   xcodeVersion: "15.0"
   generateEmptyDirectories: true
+
+packages:
+  WalkieTalkieCore:
+    path: /Users/shifengzhang/.openclaw/workspace
 
 settings:
   base:
@@ -17,15 +21,23 @@ targets:
     type: application
     platform: iOS
     sources:
-      - path: Sources
-        excludes:
-          - "**/.DS_Store"
+      - path: Sources/WolkieTalkie
+    dependencies:
+      - package: WalkieTalkieCore
+        product: Bridge
+      - package: WalkieTalkieCore
+        product: Core
+      - package: WalkieTalkieCore
+        product: Managers
+      - package: WalkieTalkieCore
+        product: Protocols
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.wolkie.talkie
         INFOPLIST_FILE: Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: ""
         DEVELOPMENT_TEAM: ""
         ENABLE_PREVIEWS: YES
     info:
@@ -53,3 +65,19 @@ targets:
         UIBackgroundModes:
           - audio
           - bluetooth-central
+
+  WolkieTalkieTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/WolkieTalkieTests
+    dependencies:
+      - target: WolkieTalkie
+      - package: WalkieTalkieCore
+        product: Core
+      - package: WalkieTalkieCore
+        product: Bridge
+      - package: WalkieTalkieCore
+        product: Protocols
+      - package: WalkieTalkieCore
+        product: Managers
