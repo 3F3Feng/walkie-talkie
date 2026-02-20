@@ -4,7 +4,8 @@ import PackageDescription
 let package = Package(
     name: "WolkieTalkie",
     platforms: [
-        .iOS(.v16)
+        .iOS(.v16),
+        .macOS(.v13)
     ],
     products: [
         .library(
@@ -12,11 +13,18 @@ let package = Package(
             targets: ["WolkieTalkie"]
         ),
     ],
-    dependencies: [],
+    dependencies: [
+        .package(name: "WalkieTalkieCore", path: "/Users/shifengzhang/.openclaw/workspace")
+    ],
     targets: [
         .target(
             name: "WolkieTalkie",
-            dependencies: [],
+            dependencies: [
+                .product(name: "Bridge", package: "WalkieTalkieCore"),
+                .product(name: "Core", package: "WalkieTalkieCore"),
+                .product(name: "Managers", package: "WalkieTalkieCore"),
+                .product(name: "Protocols", package: "WalkieTalkieCore")
+            ],
             path: "Sources/WolkieTalkie",
             exclude: ["ProximityManager_fixes.swift"]
         ),
