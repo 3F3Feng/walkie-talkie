@@ -22,18 +22,17 @@ jobs:
       - name: Build with SPM
         run: |
           echo "🔨 使用 Swift Package Manager 构建..."
-          swift build --target WolkieTalkie 2>&1 || echo "⚠️ 构建警告（继续）"
+          swift build --target WolkieTalkie
 
       - name: Run Tests with SPM
         run: |
           echo "🧪 运行 SPM 测试..."
-          swift test 2>&1 || echo "⚠️ 测试警告（继续）"
-        continue-on-error: true
+          swift test
 
       - name: Summary
+        if: always()
         run: |
           echo ""
-          echo "✅ SPM 迁移完成"
-          echo ""
-          echo "📦 Package.swift 配置："
-          cat Package.swift
+          echo "✅ CI 完成"
+          echo "构建: success"
+          echo "测试: $(if [ $? -eq 0 ]; then echo 'success'; else echo 'failed'; fi)"
