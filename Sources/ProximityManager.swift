@@ -470,7 +470,7 @@ class ProximityManager: NSObject, ObservableObject {
     
     // MARK: - 多设备支持
     @Published private(set) var activeDevices: [TrackedDevice] = []
-    @Published private(set) var discoverableDevices: [TrackedDevice] = []
+    @Published var discoverableDevices: [TrackedDevice] = []
     
     /// 当前距离（第一个活跃设备的距离，用于兼容旧UI）
     var currentPrimaryDistance: Double {
@@ -977,11 +977,24 @@ class ProximityManager: NSObject, ObservableObject {
     
     // MARK: - 配对功能
     
-    /// 切换配对模式（异步版 - 避免 UI 卡顿）
+    /// 添加发现的设备（强制刷新UI）
     func addDiscoveredDevice(_ device: TrackedDevice) {
-        if !discoverableDevices.contains(where: { $0.id == device.id }) {
+        // 过滤：只保留距离 < 50m 的设备
+        if device.distance >= 50 { return }
+        
+        // 更新或添加
+        if let index = discoverableDevices.firstIndex(where: { $0.id == device.id }) {
+            // 更新属性（@Published 会自动触发UI）
+            discoverableDevices[index].distance = device.distance
+            discoverableDevices[index].rssi = device.rssi
+            discoverableDevices[index].lastSeen = Date()
+        } else {
             discoverableDevices.append(device)
+            print("[Manager] 📱 \(device.displayName) (\(String(format: "%.1f", device.distance))m)")
         }
+        
+        // 按距离排序
+        discoverableDevices.sort { $0.distance < $1.distance }
     }
     
     func togglePairingMode() {
@@ -1337,29 +1350,51 @@ class BLEDiscoveryProvider: NSObject, CBCentralManagerDelegate {
     }
     
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
-        guard RSSI.intValue > -90 else { return }
+        // 剔除信号太弱的设备（RSSI < -85）
+        guard RSSI.intValue > -85 else { 
+            // 如果信号变弱，从列表中移除
+            removeWeakDevice(peripheral)
+            return 
+        }
         
         let advertisedName = advertisementData[CBAdvertisementDataLocalNameKey] as? String
         let name = advertisedName ?? peripheral.name ?? "BLE设备"
         let distance = rssiToDistance(RSSI.intValue)
         
-        print("[BLE] 📱 \(name) RSSI:\(RSSI) dBm → \(String(format: "%.1f", distance))m")
+        // 只记录 Walkie 设备
+        let isWalkie = name.lowercased().contains("walkie")
         
         guard let parent = parentManager else { return }
         
         let deviceId = peripheral.identifier.uuidString
         if let existing = parent.discoverableDevices.first(where: { $0.id == deviceId }) {
-            existing.distance = distance
-            existing.rssi = RSSI.intValue
-            existing.lastSeen = Date()
-        } else {
+            // 更新现有设备 - 使用自通知触发UI
+            existing.objectWillChange.send()
+            DispatchQueue.main.async {
+                existing.distance = distance
+                existing.rssi = RSSI.intValue
+                existing.lastSeen = Date()
+            }
+        } else if isWalkie {
+            // 只添加 Walkie 设备
             let device = TrackedDevice(bleName: name, bleId: deviceId)
             device.distance = distance
             device.rssi = RSSI.intValue
             device.providerType = .bluetooth
+            device.isWalkieTalkie = true
             device.connectionState = .connecting
             parent.addDiscoveredDevice(device)
-            print("[BLE] ➕ 添加: \(name)")
+            print("[BLE] ➕ 添加 Walkie: \(name) (\(String(format: "%.1f", distance))m)")
+        }
+    }
+    
+    private func removeWeakDevice(_ peripheral: CBPeripheral) {
+        guard let parent = parentManager else { return }
+        let deviceId = peripheral.identifier.uuidString
+        if let index = parent.discoverableDevices.firstIndex(where: { $0.id == deviceId }) {
+            // 如果信号持续弱，从列表中移除
+            parent.discoverableDevices.remove(at: index)
+            print("[BLE] 👋 信号太弱移除: \(peripheral.identifier.uuidString.prefix(6))")
         }
     }
     

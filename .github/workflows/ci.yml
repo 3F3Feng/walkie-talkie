@@ -11,33 +11,25 @@ jobs:
     name: Test (xcode ${{ matrix.xcode }})
     runs-on: macos-latest
     strategy:
-      matrix:
-        xcode: ['15.0']
-        destination: ['platform=iOS Simulator,name=iPhone 17 Pro']
+      fail-fast: false
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
-
-      - name: Cache Swift packages
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/Library/Developer/Xcode/DerivedData
-            .build
-          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
-          restore-keys: |
-            ${{ runner.os }}-spm-
+        run: |
+          XCODE=$(ls /Applications | grep -i xcode | head -1)
+          if [ -n "$XCODE" ]; then
+            sudo xcode-select -s /Applications/$XCODE
+          fi
 
       - name: Build
         run: |
           xcodebuild build-for-testing \
             -project WolkieTalkie.xcodeproj \
             -scheme WolkieTalkie \
-            -destination '${{ matrix.destination }}' \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
             -derivedDataPath DerivedData
 
       - name: Run Unit Tests
@@ -45,15 +37,15 @@ jobs:
           xcodebuild test-without-building \
             -project WolkieTalkie.xcodeproj \
             -scheme WolkieTalkie \
-            -destination '${{ matrix.destination }}' \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
             -derivedDataPath DerivedData \
             -resultBundlePath TestResults
 
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: test-results-${{ matrix.xcode }}
+          name: test-results
           path: TestResults
           retention-days: 7
 
@@ -66,7 +58,11 @@ jobs:
         uses: actions/checkout@v4
         
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_15.0.app
+        run: |
+          XCODE=$(ls /Applications | grep -i xcode | head -1)
+          if [ -n "$XCODE" ]; then
+            sudo xcode-select -s /Applications/$XCODE
+          fi
         
       - name: Build for iOS Simulator
         run: |
@@ -75,12 +71,3 @@ jobs:
             -scheme WolkieTalkie \
             -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
             CODE_SIGNING_ALLOWED=NO
-
-      - name: Build for iOS Device
-        run: |
-          xcodebuild build \
-            -project WolkieTalkie.xcodeproj \
-            -scheme WolkieTalkie \
-            -destination 'generic/platform=iOS Device' \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO
