@@ -29,7 +29,7 @@ jobs:
           xcodebuild build-for-testing \
             -project WolkieTalkie.xcodeproj \
             -scheme WolkieTalkie \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
             -derivedDataPath DerivedData
 
       - name: Run Unit Tests
@@ -37,7 +37,7 @@ jobs:
           xcodebuild test-without-building \
             -project WolkieTalkie.xcodeproj \
             -scheme WolkieTalkie \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
             -derivedDataPath DerivedData \
             -resultBundlePath TestResults
 
@@ -69,5 +69,5 @@ jobs:
           xcodebuild build \
             -project WolkieTalkie.xcodeproj \
             -scheme WolkieTalkie \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
             CODE_SIGNING_ALLOWED=NO
