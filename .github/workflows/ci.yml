@@ -26,19 +26,16 @@ jobs:
           
       - name: Generate Xcode Project
         run: |
-          cd ~/Documents/walkie-talkie
           xcodegen generate
           
       - name: Build with Xcode
         run: |
           echo "🔨 使用 Xcode 构建..."
-          cd ~/Documents/walkie-talkie
           xcodebuild -project WolkieTalkie.xcodeproj -scheme WolkieTalkie -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 15' build CODE_SIGNING_ALLOWED=NO
           
       - name: Run Tests with Xcode
         run: |
           echo "🧪 运行 iOS 测试..."
-          cd ~/Documents/walkie-talkie
           xcodebuild -project WolkieTalkie.xcodeproj -scheme WolkieTalkie -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 15' test CODE_SIGNING_ALLOWED=NO
           
       - name: Summary
