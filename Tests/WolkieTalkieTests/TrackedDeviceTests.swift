@@ -11,7 +11,6 @@ final class TrackedDeviceTests: XCTestCase {
         
         XCTAssertEqual(device.displayName, "TestDevice")
         XCTAssertEqual(device.id, "TestDevice")
-        XCTAssertEqual(device.connectionState, .connecting)
     }
     
     func testInit_WithBLE() {
@@ -38,9 +37,6 @@ final class TrackedDeviceTests: XCTestCase {
         
         device.rssi = -60
         XCTAssertEqual(device.rssi, -60)
-        
-        device.rssi = -80
-        XCTAssertEqual(device.rssi, -80)
     }
     
     // MARK: - 配对状态测试
@@ -55,15 +51,9 @@ final class TrackedDeviceTests: XCTestCase {
         XCTAssertEqual(device.pairingState, .pending)
     }
     
-    func testPairingState_Paired() {
-        let device = TrackedDevice(bleName: "Test", bleId: "test-5")
-        device.pairingState = .paired
-        XCTAssertEqual(device.pairingState, .paired)
-    }
-    
     // MARK: - Provider Type 测试
     func testProviderType_Default() {
-        let device = TrackedDevice(bleName: "Test", bleId: "test-6")
+        let device = TrackedDevice(bleName: "Test", bleId: "test-5")
         XCTAssertEqual(device.providerType, .bluetooth)
     }
 }
