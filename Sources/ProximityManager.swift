@@ -1399,6 +1399,9 @@ class BLEManager: NSObject, CBCentralManagerDelegate, CBPeripheralManagerDelegat
     @Published var isScanning = false
     @Published var isAdvertising = false
     
+    // 定时器 - 每500ms刷新距离
+    private var updateTimer: Timer?
+    
     // 发现的设备
     var discoveredPeripherals: [CBPeripheral: PeripheralInfo] = [:]
     

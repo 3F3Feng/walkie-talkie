@@ -237,10 +237,14 @@ struct ContentView: View {
                         }
                     }
                     
-                    // 可发现设备
-                    if !proximityManager.discoverableDevices.isEmpty {
+                    // 可发现设备（Walkie置顶，其他按距离排序）
+                    let walkieDevices = proximityManager.discoverableDevices.filter { $0.displayName.lowercased().contains("walkie") }.sorted { $0.distance < $1.distance }
+                    let otherDevices = proximityManager.discoverableDevices.filter { !$0.displayName.lowercased().contains("walkie") }.sorted { $0.distance < $1.distance }
+                    let sortedDevices = walkieDevices + otherDevices
+                    
+                    if !sortedDevices.isEmpty {
                         Section {
-                            ForEach(proximityManager.discoverableDevices) { device in
+                            ForEach(sortedDevices) { device in
                                 DiscoverableDeviceCard(device: device)
                             }
                         } header: {
@@ -505,13 +509,15 @@ struct ConnectedDeviceCard: View {
 
 // MARK: - 可发现设备卡片
 struct DiscoverableDeviceCard: View {
-    let device: TrackedDevice
+    @ObservedObject var device: TrackedDevice
+    @StateObject private var manager = ProximityManager.shared
     
     var body: some View {
         HStack {
-            Image(systemName: "wave.3.right")
+            // 设备图标
+            Image(systemName: device.providerType == .uwb ? "antenna.radiowaves.left.and.right" : "wave.3.right")
                 .font(.title2)
-                .foregroundColor(.blue)
+                .foregroundColor(device.providerType == .uwb ? .green : .blue)
                 .frame(width: 40)
             
             VStack(alignment: .leading, spacing: 2) {
@@ -520,15 +526,46 @@ struct DiscoverableDeviceCard: View {
                     .fontWeight(.medium)
                     .foregroundColor(.white)
                 
-                Text("等待连接...")
-                    .font(.caption)
-                    .foregroundColor(.gray)
+                HStack(spacing: 4) {
+                    // 距离
+                    if device.distance > 0 {
+                        Text(String(format: "%.1fm", device.distance))
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+                    
+                    // 配对状态
+                    if device.pairingState == .paired {
+                        Text("已配对")
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.green.opacity(0.3))
+                            .cornerRadius(4)
+                    }
+                }
             }
             
             Spacer()
             
-            ProgressView()
-                .progressViewStyle(CircularProgressViewStyle(tint: .blue))
+            // 配对按钮（仅未配对时显示）
+            if device.pairingState != .paired {
+                Button(action: {
+                    manager.requestPairing(with: device)
+                }) {
+                    Text("配对")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.blue)
+                        .cornerRadius(8)
+                }
+            } else {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+            }
         }
         .padding(12)
         .background(
