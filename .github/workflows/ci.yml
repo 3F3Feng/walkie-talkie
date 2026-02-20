@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test (xcode ${{ matrix.xcode }})
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        xcode: ['15.0']
+        destination: ['platform=iOS Simulator,name=iPhone 17 Pro']
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
+
+      - name: Cache Swift packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/Library/Developer/Xcode/DerivedData
+            .build
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Build
+        run: |
+          xcodebuild build-for-testing \
+            -project WolkieTalkie.xcodeproj \
+            -scheme WolkieTalkie \
+            -destination '${{ matrix.destination }}' \
+            -derivedDataPath DerivedData
+
+      - name: Run Unit Tests
+        run: |
+          xcodebuild test-without-building \
+            -project WolkieTalkie.xcodeproj \
+            -scheme WolkieTalkie \
+            -destination '${{ matrix.destination }}' \
+            -derivedDataPath DerivedData \
+            -resultBundlePath TestResults
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results-${{ matrix.xcode }}
+          path: TestResults
+          retention-days: 7
+
+  build:
+    name: Build
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.0.app
+        
+      - name: Build for iOS Simulator
+        run: |
+          xcodebuild build \
+            -project WolkieTalkie.xcodeproj \
+            -scheme WolkieTalkie \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Build for iOS Device
+        run: |
+          xcodebuild build \
+            -project WolkieTalkie.xcodeproj \
+            -scheme WolkieTalkie \
+            -destination 'generic/platform=iOS Device' \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO
