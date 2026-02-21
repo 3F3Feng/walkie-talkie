@@ -6,31 +6,12 @@ options:
   xcodeVersion: "15.0"
   generateEmptyDirectories: true
 
-packages:
-  WalkieTalkieCore:
-    path: /Users/shifengzhang/.openclaw/workspace
-
-settings:
-  base:
-    SWIFT_VERSION: "5.9"
-    TARGETED_DEVICE_FAMILY: "1"
-    INFOPLIST_FILE: Info.plist
-
 targets:
   WolkieTalkie:
     type: application
     platform: iOS
     sources:
-      - path: Sources/WolkieTalkie
-    dependencies:
-      - package: WalkieTalkieCore
-        product: Bridge
-      - package: WalkieTalkieCore
-        product: Core
-      - package: WalkieTalkieCore
-        product: Managers
-      - package: WalkieTalkieCore
-        product: Protocols
+      - Sources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.wolkie.talkie
@@ -40,6 +21,8 @@ targets:
         CODE_SIGN_IDENTITY: ""
         DEVELOPMENT_TEAM: ""
         ENABLE_PREVIEWS: YES
+        SWIFT_VERSION: "5.9"
+        TARGETED_DEVICE_FAMILY: "1"
     info:
       path: Info.plist
       properties:
@@ -70,14 +53,6 @@ targets:
     type: bundle.unit-test
     platform: iOS
     sources:
-      - path: Tests/WolkieTalkieTests
+      - Tests
     dependencies:
       - target: WolkieTalkie
-      - package: WalkieTalkieCore
-        product: Core
-      - package: WalkieTalkieCore
-        product: Bridge
-      - package: WalkieTalkieCore
-        product: Protocols
-      - package: WalkieTalkieCore
-        product: Managers

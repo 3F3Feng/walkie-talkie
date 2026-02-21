@@ -1,6 +1,6 @@
 // MARK: - 简化单元测试 - 使用 Core 模块
 import XCTest
-import Core
+@testable import WolkieTalkie
 
 final class ProximityManagerTests: XCTestCase {
 

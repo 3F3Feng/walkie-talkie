@@ -1,6 +1,6 @@
 // MARK: - TrackedDevice 单元测试
 import XCTest
-import Core
+@testable import WolkieTalkie
 
 #if canImport(MultipeerConnectivity)
 import MultipeerConnectivity

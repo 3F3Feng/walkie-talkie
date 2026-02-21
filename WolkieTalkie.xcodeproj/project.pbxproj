@@ -3,39 +3,156 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 63;
+	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
-		630F1BBD3E7191069E586858 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CB76EAC93C6AEBCF896C908 /* AppDelegate.swift */; };
-		690105642705D1299734954E /* PeerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91B09CEAA423CA62EF5B2391 /* PeerManager.swift */; };
-		8928DCDB23962F88E5CBA784 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 552D48EC76479706B4873B19 /* ContentView.swift */; };
-		9A2A5FE9E49AE9A596AC9457 /* ProximityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 206AFE53AB4EFAD73E690E8C /* ProximityManager.swift */; };
-		D0134B03190BB27E5E286D8C /* RadarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1ED00A581AE6CF4B765D069 /* RadarView.swift */; };
+		16B956BBAA5058E0ADB5F705 /* TrackedDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 302BCAA54F678F2F614E5315 /* TrackedDevice.swift */; };
+		20A030894FD6785AA6EFE46D /* BLEProviderProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33F65668852904FC887C5C3C /* BLEProviderProtocol.swift */; };
+		2649594E6F7F90E1FDB34ED0 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B28FFF4BD5DCD2223F206EBF /* ContentView.swift */; };
+		2E1EDC47C873167B4F2E469D /* MockBLEProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65C7CC0407FC1E2BC9D3908B /* MockBLEProvider.swift */; };
+		313A33D4E332580257D99964 /* RSSIDistanceCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81E8940045D10C544E71BF1C /* RSSIDistanceCalculator.swift */; };
+		48CF2DA94AD032A27515AFA4 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 866D5C4DF90F8F1976267B0E /* README.md */; };
+		545E680C6161A679AC48F48E /* WalkieCoreBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27306F76CF5644AE876937EF /* WalkieCoreBridge.swift */; };
+		552615E199442025E454F7D2 /* DeviceSorter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B725E9994090E11DCB32F2BF /* DeviceSorter.swift */; };
+		68884EA77084343FB1133F33 /* BasicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B08BA24E8F70F42188593A4C /* BasicTests.swift */; };
+		8F5249C21461FFED887A833A /* TrackedDeviceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EE8265E5FD9A1E2E477B110 /* TrackedDeviceTests.swift */; };
+		9CCA732F82C5CF98BA914FF1 /* DistanceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75FB9A15C6D24A3AD8839D91 /* DistanceManager.swift */; };
+		A6140C7ED41918A29F3BFA97 /* PairingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE4CD4461ADD1106157D6EB0 /* PairingManager.swift */; };
+		C6F41C38E7307358BF33F3F0 /* RadarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97BD132DBA1990CFB397B025 /* RadarView.swift */; };
+		D718028B6857462F289DC7BE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F57AFD773D145104E0B877FE /* AppDelegate.swift */; };
+		D78FB3E93C2391A5F7E23F38 /* DeviceDiscoveryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBB03E411B0F33348B8BED2D /* DeviceDiscoveryManager.swift */; };
+		D818EC9CE674E276B4AD2B7C /* ProximityManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37B1A6CDABD7CCE28E8743A5 /* ProximityManagerTests.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		EE0646BE664D4D7C0B4B058E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 6CBAA746ABBA986E305FADE8 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AB3CEC24C9DE6536C61143EA;
+			remoteInfo = WolkieTalkie;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
-		206AFE53AB4EFAD73E690E8C /* ProximityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProximityManager.swift; sourceTree = "<group>"; };
-		552D48EC76479706B4873B19 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		91B09CEAA423CA62EF5B2391 /* PeerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerManager.swift; sourceTree = "<group>"; };
-		9CB76EAC93C6AEBCF896C908 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-		A6FA910C8DF5B02BA463B900 /* WolkieTalkie.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WolkieTalkie.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		E1ED00A581AE6CF4B765D069 /* RadarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarView.swift; sourceTree = "<group>"; };
+		27306F76CF5644AE876937EF /* WalkieCoreBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalkieCoreBridge.swift; sourceTree = "<group>"; };
+		302BCAA54F678F2F614E5315 /* TrackedDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackedDevice.swift; sourceTree = "<group>"; };
+		33F65668852904FC887C5C3C /* BLEProviderProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BLEProviderProtocol.swift; sourceTree = "<group>"; };
+		37B1A6CDABD7CCE28E8743A5 /* ProximityManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProximityManagerTests.swift; sourceTree = "<group>"; };
+		4EE8265E5FD9A1E2E477B110 /* TrackedDeviceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackedDeviceTests.swift; sourceTree = "<group>"; };
+		65C7CC0407FC1E2BC9D3908B /* MockBLEProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockBLEProvider.swift; sourceTree = "<group>"; };
+		75FB9A15C6D24A3AD8839D91 /* DistanceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DistanceManager.swift; sourceTree = "<group>"; };
+		81E8940045D10C544E71BF1C /* RSSIDistanceCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RSSIDistanceCalculator.swift; sourceTree = "<group>"; };
+		866D5C4DF90F8F1976267B0E /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		97BD132DBA1990CFB397B025 /* RadarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarView.swift; sourceTree = "<group>"; };
+		A6FA910C8DF5B02BA463B900 /* WolkieTalkie.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = WolkieTalkie.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B08BA24E8F70F42188593A4C /* BasicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BasicTests.swift; sourceTree = "<group>"; };
+		B28FFF4BD5DCD2223F206EBF /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		B725E9994090E11DCB32F2BF /* DeviceSorter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceSorter.swift; sourceTree = "<group>"; };
+		D39CF62E30193A11C88BD0A3 /* WolkieTalkieTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = WolkieTalkieTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F57AFD773D145104E0B877FE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		FBB03E411B0F33348B8BED2D /* DeviceDiscoveryManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDiscoveryManager.swift; sourceTree = "<group>"; };
+		FE4CD4461ADD1106157D6EB0 /* PairingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		0E1883BE114DC262F644B97F /* Protocols */ = {
+			isa = PBXGroup;
+			children = (
+				33F65668852904FC887C5C3C /* BLEProviderProtocol.swift */,
+			);
+			path = Protocols;
+			sourceTree = "<group>";
+		};
 		1251DF5BC7F4BA63FDCAC6A7 /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				A6FA910C8DF5B02BA463B900 /* WolkieTalkie.app */,
+				D39CF62E30193A11C88BD0A3 /* WolkieTalkieTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		32D1921F9AF7741452C0B8B2 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		331A192B8A4B6AE2915E4C68 /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				B725E9994090E11DCB32F2BF /* DeviceSorter.swift */,
+				81E8940045D10C544E71BF1C /* RSSIDistanceCalculator.swift */,
+				302BCAA54F678F2F614E5315 /* TrackedDevice.swift */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		362E04043E94BEC2E05D51F8 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				866D5C4DF90F8F1976267B0E /* README.md */,
+				4AEE4C5FF510ED980FBFAAFB /* IntegrationTests */,
+				B232E87A4E2F34C0F240BCE6 /* UnitTests */,
+				3CD924B943CCC6F1C0653580 /* WolkieTalkieTests */,
+			);
+			path = Tests;
+			sourceTree = "<group>";
+		};
+		3CD924B943CCC6F1C0653580 /* WolkieTalkieTests */ = {
+			isa = PBXGroup;
+			children = (
+				B08BA24E8F70F42188593A4C /* BasicTests.swift */,
+				37B1A6CDABD7CCE28E8743A5 /* ProximityManagerTests.swift */,
+				4EE8265E5FD9A1E2E477B110 /* TrackedDeviceTests.swift */,
+			);
+			path = WolkieTalkieTests;
+			sourceTree = "<group>";
+		};
+		4AEE4C5FF510ED980FBFAAFB /* IntegrationTests */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = IntegrationTests;
+			sourceTree = "<group>";
+		};
+		4CD7DD4A2423C98047661FB6 /* Mocks */ = {
+			isa = PBXGroup;
+			children = (
+				65C7CC0407FC1E2BC9D3908B /* MockBLEProvider.swift */,
+			);
+			path = Mocks;
+			sourceTree = "<group>";
+		};
+		5FE1DD917044A7ADFE6AD8FE /* App */ = {
+			isa = PBXGroup;
+			children = (
+				F57AFD773D145104E0B877FE /* AppDelegate.swift */,
+				B28FFF4BD5DCD2223F206EBF /* ContentView.swift */,
+				97BD132DBA1990CFB397B025 /* RadarView.swift */,
+				32D1921F9AF7741452C0B8B2 /* Resources */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		866875F34365FFF058BCE4AF /* Managers */ = {
+			isa = PBXGroup;
+			children = (
+				FBB03E411B0F33348B8BED2D /* DeviceDiscoveryManager.swift */,
+				75FB9A15C6D24A3AD8839D91 /* DistanceManager.swift */,
+				FE4CD4461ADD1106157D6EB0 /* PairingManager.swift */,
+			);
+			path = Managers;
 			sourceTree = "<group>";
 		};
 		9EF3FD2A2CDFA73AC9C22A99 = {
 			isa = PBXGroup;
 			children = (
 				A18E289A602E837AD760E203 /* Sources */,
+				362E04043E94BEC2E05D51F8 /* Tests */,
 				1251DF5BC7F4BA63FDCAC6A7 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -43,13 +160,29 @@
 		A18E289A602E837AD760E203 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
-				9CB76EAC93C6AEBCF896C908 /* AppDelegate.swift */,
-				552D48EC76479706B4873B19 /* ContentView.swift */,
-				91B09CEAA423CA62EF5B2391 /* PeerManager.swift */,
-				206AFE53AB4EFAD73E690E8C /* ProximityManager.swift */,
-				E1ED00A581AE6CF4B765D069 /* RadarView.swift */,
+				5FE1DD917044A7ADFE6AD8FE /* App */,
+				DDCD78CFE6D04B0A2C1CA9B5 /* Bridge */,
+				331A192B8A4B6AE2915E4C68 /* Core */,
+				866875F34365FFF058BCE4AF /* Managers */,
+				4CD7DD4A2423C98047661FB6 /* Mocks */,
+				0E1883BE114DC262F644B97F /* Protocols */,
 			);
 			path = Sources;
+			sourceTree = "<group>";
+		};
+		B232E87A4E2F34C0F240BCE6 /* UnitTests */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = UnitTests;
+			sourceTree = "<group>";
+		};
+		DDCD78CFE6D04B0A2C1CA9B5 /* Bridge */ = {
+			isa = PBXGroup;
+			children = (
+				27306F76CF5644AE876937EF /* WalkieCoreBridge.swift */,
+			);
+			path = Bridge;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -72,6 +205,25 @@
 			productReference = A6FA910C8DF5B02BA463B900 /* WolkieTalkie.app */;
 			productType = "com.apple.product-type.application";
 		};
+		D038ECD2CDBE7579EC8915C1 /* WolkieTalkieTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 41773347DED7DF36ABB90C81 /* Build configuration list for PBXNativeTarget "WolkieTalkieTests" */;
+			buildPhases = (
+				D1873550B08F1F4A2035B5DE /* Sources */,
+				A2F0CC727E69D82E6B7388BA /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				F1BD9C43BC6B2866AF5A7144 /* PBXTargetDependency */,
+			);
+			name = WolkieTalkieTests;
+			packageProductDependencies = (
+			);
+			productName = WolkieTalkieTests;
+			productReference = D39CF62E30193A11C88BD0A3 /* WolkieTalkieTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -82,7 +234,8 @@
 				LastUpgradeCheck = 1500;
 				TargetAttributes = {
 					AB3CEC24C9DE6536C61143EA = {
-						ProvisioningStyle = Automatic;
+						DevelopmentTeam = "";
+						ProvisioningStyle = Manual;
 					};
 				};
 			};
@@ -96,47 +249,101 @@
 			);
 			mainGroup = 9EF3FD2A2CDFA73AC9C22A99;
 			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				AB3CEC24C9DE6536C61143EA /* WolkieTalkie */,
+				D038ECD2CDBE7579EC8915C1 /* WolkieTalkieTests */,
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A2F0CC727E69D82E6B7388BA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				48CF2DA94AD032A27515AFA4 /* README.md in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		4E23C51A74BF9993766DD623 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				630F1BBD3E7191069E586858 /* AppDelegate.swift in Sources */,
-				8928DCDB23962F88E5CBA784 /* ContentView.swift in Sources */,
-				690105642705D1299734954E /* PeerManager.swift in Sources */,
-				9A2A5FE9E49AE9A596AC9457 /* ProximityManager.swift in Sources */,
-				D0134B03190BB27E5E286D8C /* RadarView.swift in Sources */,
+				D718028B6857462F289DC7BE /* AppDelegate.swift in Sources */,
+				20A030894FD6785AA6EFE46D /* BLEProviderProtocol.swift in Sources */,
+				2649594E6F7F90E1FDB34ED0 /* ContentView.swift in Sources */,
+				D78FB3E93C2391A5F7E23F38 /* DeviceDiscoveryManager.swift in Sources */,
+				552615E199442025E454F7D2 /* DeviceSorter.swift in Sources */,
+				9CCA732F82C5CF98BA914FF1 /* DistanceManager.swift in Sources */,
+				2E1EDC47C873167B4F2E469D /* MockBLEProvider.swift in Sources */,
+				A6140C7ED41918A29F3BFA97 /* PairingManager.swift in Sources */,
+				313A33D4E332580257D99964 /* RSSIDistanceCalculator.swift in Sources */,
+				C6F41C38E7307358BF33F3F0 /* RadarView.swift in Sources */,
+				16B956BBAA5058E0ADB5F705 /* TrackedDevice.swift in Sources */,
+				545E680C6161A679AC48F48E /* WalkieCoreBridge.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D1873550B08F1F4A2035B5DE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				68884EA77084343FB1133F33 /* BasicTests.swift in Sources */,
+				D818EC9CE674E276B4AD2B7C /* ProximityManagerTests.swift in Sources */,
+				8F5249C21461FFED887A833A /* TrackedDeviceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		F1BD9C43BC6B2866AF5A7144 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AB3CEC24C9DE6536C61143EA /* WolkieTalkie */;
+			targetProxy = EE0646BE664D4D7C0B4B058E /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		4CFB7BCB98FE45ACDA079D5E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.wolkie.WolkieTalkieTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/WolkieTalkie.app/WolkieTalkie";
+			};
+			name = Release;
+		};
 		5F43EEE2DE96C2E206AA7010 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = TF2344DD92;
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Info.plist;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.wolkie.talkie;
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -144,19 +351,19 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = TF2344DD92;
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Info.plist;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.wolkie.talkie;
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};
@@ -211,8 +418,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				INFOPLIST_FILE = Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -220,8 +426,7 @@
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.9;
-				TARGETED_DEVICE_FAMILY = 1;
+				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
 		};
@@ -270,22 +475,45 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				INFOPLIST_FILE = Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
-				SWIFT_VERSION = 5.9;
-				TARGETED_DEVICE_FAMILY = 1;
+				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
+		};
+		E80EBE0B93FC0BF0C012148B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.wolkie.WolkieTalkieTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/WolkieTalkie.app/WolkieTalkie";
+			};
+			name = Debug;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		41773347DED7DF36ABB90C81 /* Build configuration list for PBXNativeTarget "WolkieTalkieTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E80EBE0B93FC0BF0C012148B /* Debug */,
+				4CFB7BCB98FE45ACDA079D5E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		5BEB964C4679C067059E8821 /* Build configuration list for PBXNativeTarget "WolkieTalkie" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

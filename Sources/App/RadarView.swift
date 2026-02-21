@@ -1,7 +1,7 @@
 import SwiftUI
 import NearbyInteraction
 import simd
-import Core
+
 
 // MARK: - Proximity Manager (简化版)
 

@@ -1,6 +1,6 @@
 import SwiftUI
-import Core
-import Bridge
+
+
 
 /// Talk mode for walkie talkie
 public enum TalkMode: String, CaseIterable, Identifiable {
