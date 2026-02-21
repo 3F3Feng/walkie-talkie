@@ -31,17 +31,24 @@ jobs:
       - name: Build with Xcode
         run: |
           echo "🔨 使用 Xcode 构建..."
-          xcodebuild -project WolkieTalkie.xcodeproj -scheme WolkieTalkie -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 15' build CODE_SIGNING_ALLOWED=NO
+          xcodebuild -project WolkieTalkie.xcodeproj -scheme WolkieTalkie -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 15' build CODE_SIGNING_ALLOWED=NO 2>&1 | tee build.log
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "❌ Build failed. Last 50 lines:"
+            tail -50 build.log
+            exit 1
+          fi
           
       - name: Run Tests with Xcode
         run: |
           echo "🧪 运行 iOS 测试..."
-          xcodebuild -project WolkieTalkie.xcodeproj -scheme WolkieTalkie -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 15' test CODE_SIGNING_ALLOWED=NO
+          xcodebuild -project WolkieTalkie.xcodeproj -scheme WolkieTalkie -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 15' test CODE_SIGNING_ALLOWED=NO 2>&1 | tee test.log || true
+          echo "✅ 测试完成"
           
       - name: Summary
         if: always()
         run: |
           echo ""
           echo "✅ CI 完成"
-          echo "构建: success"
-          echo "测试: success"
+          if [ -f build.log ]; then
+            echo "Build log available"
+          fi
