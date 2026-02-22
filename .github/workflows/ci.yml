@@ -19,6 +19,7 @@ jobs:
         run: |
           sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
           xcodebuild -version
+          xcrun simctl list devices available | head -30
           
       - name: Install XcodeGen
         run: |
@@ -27,28 +28,30 @@ jobs:
       - name: Generate Xcode Project
         run: |
           xcodegen generate
+          ls -la *.xcodeproj
           
       - name: Build with Xcode
         run: |
           echo "🔨 使用 Xcode 构建..."
+          xcodebuild -project WolkieTalkie.xcodeproj -list
           xcodebuild -project WolkieTalkie.xcodeproj -scheme WolkieTalkie -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 15' build CODE_SIGNING_ALLOWED=NO 2>&1 | tee build.log
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "❌ Build failed. Last 50 lines:"
-            tail -50 build.log
+          BUILD_EXIT=${PIPESTATUS[0]}
+          echo "Build exit code: $BUILD_EXIT"
+          if [ $BUILD_EXIT -ne 0 ]; then
+            echo "❌ Build failed. Build log:"
+            cat build.log | grep -E "error:|warning:" | head -30
             exit 1
           fi
+          echo "✅ Build successful"
           
       - name: Run Tests with Xcode
         run: |
           echo "🧪 运行 iOS 测试..."
-          xcodebuild -project WolkieTalkie.xcodeproj -scheme WolkieTalkie -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 15' test CODE_SIGNING_ALLOWED=NO 2>&1 | tee test.log || true
+          xcodebuild -project WolkieTalkie.xcodeproj -scheme WolkieTalkie -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 15' test CODE_SIGNING_ALLOWED=NO 2>&1 || true
           echo "✅ 测试完成"
           
       - name: Summary
         if: always()
         run: |
           echo ""
-          echo "✅ CI 完成"
-          if [ -f build.log ]; then
-            echo "Build log available"
-          fi
+          echo "✅ CI 执行完成"
