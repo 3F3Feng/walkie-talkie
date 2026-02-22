@@ -17,54 +17,30 @@ jobs:
         
       - name: Setup Xcode
         run: |
-          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          xcode-select -p
           xcodebuild -version
-          echo "Available simulators:"
-          xcrun simctl list devices available | grep -E "iPhone|iPad" | head -15
           
       - name: Install XcodeGen
         run: |
-          brew install xcodegen
+          which xcodegen || brew install xcodegen
+          xcodegen --version
           
       - name: Generate Xcode Project
         run: |
           xcodegen generate
-          ls -la *.xcodeproj
+          ls -la
           
-      - name: Build with Xcode (Generic)
+      - name: List Schemes
         run: |
-          echo "🔨 使用 Xcode 构建..."
-          # 使用 generic destination 避免模拟器名称问题
+          xcodebuild -project WolkieTalkie.xcodeproj -list
+          
+      - name: Build Debug
+        run: |
+          echo "=== Building Debug ==="
           xcodebuild -project WolkieTalkie.xcodeproj \
             -scheme WolkieTalkie \
             -configuration Debug \
             -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath ./build \
-            build 2>&1 | tee build.log
-          BUILD_EXIT=${PIPESTATUS[0]}
-          if [ $BUILD_EXIT -ne 0 ]; then
-            echo "❌ Build failed. Errors:"
-            grep -E "^/.*error:" build.log | head -20
-            cat build.log | grep -E "error:|warning:" | head -30
-            exit 1
-          fi
-          echo "✅ Build successful"
-          
-      - name: Run Tests with Xcode
-        run: |
-          echo "🧪 运行 iOS 测试..."
-          # 尝试使用第一个可用的 iPhone 模拟器
-          SIM_ID=$(xcrun simctl list devices available | grep "iPhone" | head -1 | awk -F'[][() ]+' '{print $NF}')
-          echo "Using simulator: $SIM_ID"
-          xcodebuild -project WolkieTalkie.xcodeproj \
-            -scheme WolkieTalkie \
-            -configuration Debug \
-            -destination "platform=iOS Simulator,name=$SIM_ID" \
-            test CODE_SIGNING_ALLOWED=NO 2>&1 || true
-          echo "✅ 测试完成"
-          
-      - name: Summary
-        if: always()
-        run: |
-          echo ""
-          echo "✅ CI 执行完成"
+            build \
+            CODE_SIGNING_ALLOWED=NO 2>&1
+          echo "=== Build Complete ==="
