@@ -19,6 +19,7 @@ jobs:
         run: |
           xcode-select -p
           xcodebuild -version
+          xcodebuild -showsdks
           
       - name: Install XcodeGen
         run: |
@@ -30,17 +31,13 @@ jobs:
           xcodegen generate
           ls -la
           
-      - name: List Schemes
+      - name: Build with iphonesimulator SDK
         run: |
-          xcodebuild -project WolkieTalkie.xcodeproj -list
-          
-      - name: Build Debug
-        run: |
-          echo "=== Building Debug ==="
+          echo "=== Building with iphonesimulator SDK ==="
           xcodebuild -project WolkieTalkie.xcodeproj \
             -scheme WolkieTalkie \
             -configuration Debug \
-            -destination 'generic/platform=iOS Simulator' \
+            -sdk iphonesimulator \
             build \
-            CODE_SIGNING_ALLOWED=NO 2>&1
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tail -50
           echo "=== Build Complete ==="
