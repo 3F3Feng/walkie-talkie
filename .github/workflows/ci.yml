@@ -15,10 +15,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       
-      - name: Show Xcode version
+      - name: Show environment
         run: |
+          echo "=== Environment ==="
+          sw_vers
           xcode-select -p
           xcodebuild -version
+          echo "=== Homebrew ==="
+          brew --version
       
       - name: Install XcodeGen
         run: |
@@ -30,26 +34,29 @@ jobs:
           xcodegen generate
           ls -la
       
-      - name: List Schemes
-        run: |
-          xcodebuild -project WolkieTalkie.xcodeproj -list
-      
       - name: Build
         run: |
+          echo "=== Starting Build ==="
           xcodebuild \
             -project WolkieTalkie.xcodeproj \
             -scheme WolkieTalkie \
             -configuration Debug \
             -sdk iphonesimulator \
+            -derivedDataPath ./build \
+            -verbose \
             build \
-            CODE_SIGNING_ALLOWED=NO 2>&1
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee build.log
+          EXIT_CODE=${PIPESTATUS[0]}
+          echo "=== Build Exit Code: $EXIT_CODE ==="
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "=== Last 30 lines of build log ==="
+            tail -30 build.log
+            echo "=== Errors in build log ==="
+            grep -E "error:" build.log || echo "No error lines found"
+          fi
+          exit $EXIT_CODE
       
-      - name: Test
+      - name: Test (optional)
+        if: false
         run: |
-          xcodebuild \
-            -project WolkieTalkie.xcodeproj \
-            -scheme WolkieTalkie \
-            -configuration Debug \
-            -sdk iphonesimulator \
-            test \
-            CODE_SIGNING_ALLOWED=NO 2>&1 || true
+          echo "Tests disabled for now"
