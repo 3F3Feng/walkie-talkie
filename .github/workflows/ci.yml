@@ -19,7 +19,8 @@ jobs:
         run: |
           sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
           xcodebuild -version
-          xcrun simctl list devices available | head -30
+          echo "Available simulators:"
+          xcrun simctl list devices available | grep -E "iPhone|iPad" | head -15
           
       - name: Install XcodeGen
         run: |
@@ -30,15 +31,20 @@ jobs:
           xcodegen generate
           ls -la *.xcodeproj
           
-      - name: Build with Xcode
+      - name: Build with Xcode (Generic)
         run: |
           echo "🔨 使用 Xcode 构建..."
-          xcodebuild -project WolkieTalkie.xcodeproj -list
-          xcodebuild -project WolkieTalkie.xcodeproj -scheme WolkieTalkie -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 15' build CODE_SIGNING_ALLOWED=NO 2>&1 | tee build.log
+          # 使用 generic destination 避免模拟器名称问题
+          xcodebuild -project WolkieTalkie.xcodeproj \
+            -scheme WolkieTalkie \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath ./build \
+            build 2>&1 | tee build.log
           BUILD_EXIT=${PIPESTATUS[0]}
-          echo "Build exit code: $BUILD_EXIT"
           if [ $BUILD_EXIT -ne 0 ]; then
-            echo "❌ Build failed. Build log:"
+            echo "❌ Build failed. Errors:"
+            grep -E "^/.*error:" build.log | head -20
             cat build.log | grep -E "error:|warning:" | head -30
             exit 1
           fi
@@ -47,7 +53,14 @@ jobs:
       - name: Run Tests with Xcode
         run: |
           echo "🧪 运行 iOS 测试..."
-          xcodebuild -project WolkieTalkie.xcodeproj -scheme WolkieTalkie -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 15' test CODE_SIGNING_ALLOWED=NO 2>&1 || true
+          # 尝试使用第一个可用的 iPhone 模拟器
+          SIM_ID=$(xcrun simctl list devices available | grep "iPhone" | head -1 | awk -F'[][() ]+' '{print $NF}')
+          echo "Using simulator: $SIM_ID"
+          xcodebuild -project WolkieTalkie.xcodeproj \
+            -scheme WolkieTalkie \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,name=$SIM_ID" \
+            test CODE_SIGNING_ALLOWED=NO 2>&1 || true
           echo "✅ 测试完成"
           
       - name: Summary
